@@ -146,7 +146,9 @@ router.post("/send", async (req, res) => {
         isTerminal,
       });
     } catch (err) {
-      console.error("Narrator error:", err?.message || err);
+      aiResponse = isTerminal
+        ? "Your loan has been successfully sanctioned. The sanction letter is ready. Thank you for choosing ArthaSaarthi."
+        : "Thank you. Please continue with the next step.";
     }
 
     // --------------------
