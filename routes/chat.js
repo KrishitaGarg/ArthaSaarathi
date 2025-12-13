@@ -9,11 +9,18 @@ const {
 const narrateConversation = require("../llm/narrator");
 
 // --------------------
-// Utility
+// Utility helpers
 // --------------------
 function extractNumber(text) {
   const match = text.match(/\d+/);
   return match ? Number(match[0]) : null;
+}
+
+function isLikelyName(text) {
+  return (
+    text.split(" ").length === 1 &&
+    /^[a-zA-Z]{2,}$/.test(text.trim())
+  );
 }
 
 // --------------------
@@ -28,13 +35,15 @@ router.post("/send", async (req, res) => {
     }
 
     // --------------------
-    // 1️ Load or create session
+    // 1️⃣ Load or create session
     // --------------------
-    let session;
+    let session = null;
 
     if (session_id) {
       session = await Session.findOne({ session_id });
     }
+
+    const isFirstInteraction = !session;
 
     if (!session) {
       session = await Session.create({
@@ -43,42 +52,55 @@ router.post("/send", async (req, res) => {
       });
     }
 
-    const msg = message.toLowerCase();
+    const msg = message.toLowerCase().trim();
 
     // --------------------
-    // 2️ Intent & data extraction
-    // (Allowed only before KYC is finalized)
+    // 2️⃣ Deterministic data extraction
     // --------------------
-    if (session.kyc_status !== "verified") {
-      if (msg.includes("income")) {
-        const income = extractNumber(msg);
-        if (income) session.income = income;
-      }
 
-      if (msg.includes("loan") || msg.includes("amount")) {
-        const amount = extractNumber(msg);
-        if (amount) session.loan_amount = amount;
+    // 🔹 Name extraction (HUMAN-LIKE, SAFE)
+    if (!session.name) {
+      if (msg.startsWith("my name is")) {
+        session.name = message.replace(/my name is/i, "").trim();
+      } else if (msg.startsWith("i said")) {
+        session.name = message.replace(/i said/i, "").trim();
+      } else if (isLikelyName(message)) {
+        session.name = message.trim();
       }
     }
 
+    // 🔹 Phone extraction (allowed anytime)
     const phoneMatch = msg.match(/\b\d{10}\b/);
-    if (phoneMatch) {
+    if (phoneMatch && !session.phone) {
       session.phone = phoneMatch[0];
     }
 
-    if (msg.startsWith("my name is")) {
-      session.name = message.replace(/my name is/i, "").trim();
+    // 🔹 Income & loan amount (lock after KYC)
+    if (session.kyc_status !== "verified") {
+      if (!session.income) {
+        const income = extractNumber(msg);
+        if (income && msg.includes("income")) {
+          session.income = income;
+        }
+      }
+
+      if (!session.loan_amount) {
+        const amount = extractNumber(msg);
+        if (amount && (msg.includes("loan") || msg.includes("amount"))) {
+          session.loan_amount = amount;
+        }
+      }
     }
 
     await session.save();
 
     // --------------------
-    // 3️ Orchestrator plans (THINK)
+    // 3️⃣ Orchestrator decides (THINK)
     // --------------------
     const orchestration = decideNextActions(session);
 
     // --------------------
-    // 4️ Agents execute (ACT)
+    // 4️⃣ Agents execute (ACT)
     // --------------------
     const agentResults = runAgents(session, orchestration.actions);
 
@@ -92,16 +114,25 @@ router.post("/send", async (req, res) => {
     await session.save();
 
     // --------------------
-    // 5️ LLM narration (SPEAK)
+    // 5️⃣ Terminal state detection
+    // --------------------
+    const isTerminal =
+      orchestration.goal === "COMPLETE_FLOW" ||
+      session.sanction_letter_url;
+
+    // --------------------
+    // 6️⃣ LLM narration (SPEAK)
     // --------------------
     const aiResponse = await narrateConversation({
       session,
       goal: orchestration.goal,
       agentResults,
+      isFirstInteraction,
+      isTerminal,
     });
 
     // --------------------
-    // 6️ Final response
+    // 7️⃣ Final response
     // --------------------
     res.status(200).json({
       session_id: session.session_id,
