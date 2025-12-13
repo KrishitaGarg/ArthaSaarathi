@@ -23,6 +23,13 @@ function isLikelyName(text) {
   );
 }
 
+function isLikelyMoney(text) {
+  return (
+    /^[₹rs.\s]*\d+/.test(text) ||   // ₹100000, rs. 100000
+    /^\d+$/.test(text)              // 100000
+  );
+}
+
 // --------------------
 // POST /api/chat/send
 // --------------------
@@ -55,10 +62,10 @@ router.post("/send", async (req, res) => {
     const msg = message.toLowerCase().trim();
 
     // --------------------
-    // 2️⃣ Deterministic data extraction
+    // 2️⃣ HUMAN-LIKE DATA EXTRACTION
     // --------------------
 
-    // 🔹 Name extraction (HUMAN-LIKE, SAFE)
+    // 🔹 NAME (accepts: "krish", "my name is krish", "i said krish")
     if (!session.name) {
       if (msg.startsWith("my name is")) {
         session.name = message.replace(/my name is/i, "").trim();
@@ -69,42 +76,62 @@ router.post("/send", async (req, res) => {
       }
     }
 
-    // 🔹 Phone extraction (allowed anytime)
+    // 🔹 PHONE (anytime)
     const phoneMatch = msg.match(/\b\d{10}\b/);
     if (phoneMatch && !session.phone) {
       session.phone = phoneMatch[0];
     }
 
-    // 🔹 Income & loan amount (lock after KYC)
-    if (session.kyc_status !== "verified") {
-      if (!session.income) {
-        const income = extractNumber(msg);
-        if (income && msg.includes("income")) {
-          session.income = income;
-        }
-      }
+    // 🔹 INCOME (human-friendly)
+    if (
+      !session.income &&
+      session.kyc_status !== "verified"
+    ) {
+      const income = extractNumber(msg);
 
-      if (!session.loan_amount) {
-        const amount = extractNumber(msg);
-        if (amount && (msg.includes("loan") || msg.includes("amount"))) {
-          session.loan_amount = amount;
-        }
+      if (
+        income &&
+        (
+          msg.includes("income") ||
+          msg.includes("salary") ||
+          isLikelyMoney(msg)
+        )
+      ) {
+        session.income = income;
+      }
+    }
+
+    // 🔹 LOAN AMOUNT (human-friendly)
+    if (
+      !session.loan_amount &&
+      session.kyc_status !== "verified"
+    ) {
+      const amount = extractNumber(msg);
+
+      if (
+        amount &&
+        (
+          msg.includes("loan") ||
+          msg.includes("amount") ||
+          isLikelyMoney(msg)
+        )
+      ) {
+        session.loan_amount = amount;
       }
     }
 
     await session.save();
 
     // --------------------
-    // 3️⃣ Orchestrator decides (THINK)
+    // 3️⃣ Orchestrator (THINK)
     // --------------------
     const orchestration = decideNextActions(session);
 
     // --------------------
-    // 4️⃣ Agents execute (ACT)
+    // 4️⃣ Agents (ACT)
     // --------------------
     const agentResults = runAgents(session, orchestration.actions);
 
-    // Apply agent updates
     agentResults.forEach((result) => {
       if (result.updates) {
         Object.assign(session, result.updates);
@@ -114,22 +141,29 @@ router.post("/send", async (req, res) => {
     await session.save();
 
     // --------------------
-    // 5️⃣ Terminal state detection
+    // 5️⃣ Terminal state
     // --------------------
     const isTerminal =
       orchestration.goal === "COMPLETE_FLOW" ||
       session.sanction_letter_url;
 
     // --------------------
-    // 6️⃣ LLM narration (SPEAK)
+    // 6️⃣ LLM Narration (SPEAK)
     // --------------------
-    const aiResponse = await narrateConversation({
-      session,
-      goal: orchestration.goal,
-      agentResults,
-      isFirstInteraction,
-      isTerminal,
-    });
+    let aiResponse;
+    try {
+      aiResponse = await narrateConversation({
+        session,
+        goal: orchestration.goal,
+        agentResults,
+        isFirstInteraction,
+        isTerminal,
+      });
+    } catch (err) {
+      aiResponse = isTerminal
+        ? "Your loan has been successfully sanctioned. The sanction letter is ready. Thank you for choosing ArthaSaarthi."
+        : "Thank you. Please continue with the next step.";
+    }
 
     // --------------------
     // 7️⃣ Final response
