@@ -23,17 +23,6 @@ function isLikelyName(text) {
   );
 }
 
-function isPhoneNumber(text) {
-  return /^\d{10}$/.test(text);
-}
-
-function isLikelyMoney(text) {
-  return (
-    /^[₹rs.\s]*\d+/.test(text) ||   // ₹100000, rs. 100000
-    /^\d+$/.test(text)              // 100000
-  );
-}
-
 // --------------------
 // POST /api/chat/send
 // --------------------
@@ -66,95 +55,86 @@ router.post("/send", async (req, res) => {
     const msg = message.toLowerCase().trim();
 
     // --------------------
-    // 2️⃣ HUMAN-LIKE DATA EXTRACTION
+    // 2️⃣ SAFE NAME CAPTURE (only once)
     // --------------------
-
-    // 🔹 NAME
     if (!session.name) {
       if (msg.startsWith("my name is")) {
         session.name = message.replace(/my name is/i, "").trim();
-      } else if (msg.startsWith("i said")) {
-        session.name = message.replace(/i said/i, "").trim();
       } else if (isLikelyName(message)) {
         session.name = message.trim();
       }
     }
 
-    // 🔹 PHONE (always first)
-    const phoneMatch = msg.match(/\b\d{10}\b/);
-    if (phoneMatch && !session.phone) {
-      session.phone = phoneMatch[0];
-    }
+    // --------------------
+    // 3️⃣ HANDLE USER RESPONSE BASED ON EXPECTED FIELD
+    // --------------------
+    if (session.expected_field) {
+      const value = extractNumber(msg);
 
-    // 🔹 INCOME (NEVER from phone number)
-    if (
-      !session.income &&
-      session.kyc_status !== "verified"
-    ) {
-      const income = extractNumber(msg);
-
-      if (
-        income &&
-        !isPhoneNumber(msg) &&
-        (
-          msg.includes("income") ||
-          msg.includes("salary") ||
-          isLikelyMoney(msg)
-        )
-      ) {
-        session.income = income;
+      // PHONE
+      if (session.expected_field === "phone") {
+        if (/^\d{10}$/.test(msg)) {
+          session.phone = msg;
+          session.expected_field = null;
+        }
       }
-    }
 
-    // 🔹 LOAN AMOUNT (NEVER from phone number)
-    if (
-      !session.loan_amount &&
-      session.kyc_status !== "verified"
-    ) {
-      const amount = extractNumber(msg);
-
+      // INCOME
       if (
-        amount &&
-        !isPhoneNumber(msg) &&
-        (
-          msg.includes("loan") ||
-          msg.includes("amount") ||
-          isLikelyMoney(msg)
-        )
+        session.expected_field === "income" &&
+        value &&
+        !session.income
       ) {
-        session.loan_amount = amount;
+        session.income = value;
+        session.expected_field = null;
+      }
+
+      // LOAN AMOUNT
+      if (
+        session.expected_field === "loan_amount" &&
+        value &&
+        !session.loan_amount
+      ) {
+        session.loan_amount = value;
+        session.expected_field = null;
       }
     }
 
     await session.save();
 
     // --------------------
-    // 3️⃣ Orchestrator (THINK)
+    // 4️⃣ Orchestrator decides (THINK)
     // --------------------
     const orchestration = decideNextActions(session);
 
     // --------------------
-    // 4️⃣ Agents (ACT)
+    // 5️⃣ Agents execute (ACT)
     // --------------------
     const agentResults = runAgents(session, orchestration.actions);
 
+    // Apply updates from agents
     agentResults.forEach((result) => {
       if (result.updates) {
         Object.assign(session, result.updates);
+      }
+
+      // 🔑 Capture what Sales Agent wants next
+      if (result.agent === "sales" && result.missing_fields?.length > 0) {
+        session.expected_field = result.missing_fields[0];
       }
     });
 
     await session.save();
 
     // --------------------
-    // 5️⃣ Terminal state
+    // 6️⃣ Terminal state detection
     // --------------------
     const isTerminal =
       orchestration.goal === "COMPLETE_FLOW" ||
-      session.sanction_letter_url;
+      Boolean(session.sanction_letter_url);
 
     // --------------------
-    // 6️⃣ LLM Narration (SPEAK)
+    // 7️⃣ LLM Narration (SPEAK)
     // --------------------
     let aiResponse;
     try {
@@ -172,7 +152,7 @@ router.post("/send", async (req, res) => {
     }
 
     // --------------------
-    // 7️⃣ Final response
+    // 8️⃣ Final response
     // --------------------
     res.status(200).json({
       session_id: session.session_id,
