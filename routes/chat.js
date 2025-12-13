@@ -23,6 +23,10 @@ function isLikelyName(text) {
   );
 }
 
+function isPhoneNumber(text) {
+  return /^\d{10}$/.test(text);
+}
+
 function isLikelyMoney(text) {
   return (
     /^[₹rs.\s]*\d+/.test(text) ||   // ₹100000, rs. 100000
@@ -65,7 +69,7 @@ router.post("/send", async (req, res) => {
     // 2️⃣ HUMAN-LIKE DATA EXTRACTION
     // --------------------
 
-    // 🔹 NAME (accepts: "krish", "my name is krish", "i said krish")
+    // 🔹 NAME
     if (!session.name) {
       if (msg.startsWith("my name is")) {
         session.name = message.replace(/my name is/i, "").trim();
@@ -76,13 +80,13 @@ router.post("/send", async (req, res) => {
       }
     }
 
-    // 🔹 PHONE (anytime)
+    // 🔹 PHONE (always first)
     const phoneMatch = msg.match(/\b\d{10}\b/);
     if (phoneMatch && !session.phone) {
       session.phone = phoneMatch[0];
     }
 
-    // 🔹 INCOME (human-friendly)
+    // 🔹 INCOME (NEVER from phone number)
     if (
       !session.income &&
       session.kyc_status !== "verified"
@@ -91,6 +95,7 @@ router.post("/send", async (req, res) => {
 
       if (
         income &&
+        !isPhoneNumber(msg) &&
         (
           msg.includes("income") ||
           msg.includes("salary") ||
@@ -101,7 +106,7 @@ router.post("/send", async (req, res) => {
       }
     }
 
-    // 🔹 LOAN AMOUNT (human-friendly)
+    // 🔹 LOAN AMOUNT (NEVER from phone number)
     if (
       !session.loan_amount &&
       session.kyc_status !== "verified"
@@ -110,6 +115,7 @@ router.post("/send", async (req, res) => {
 
       if (
         amount &&
+        !isPhoneNumber(msg) &&
         (
           msg.includes("loan") ||
           msg.includes("amount") ||
