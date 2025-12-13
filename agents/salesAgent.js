@@ -1,73 +1,23 @@
 // agents/salesAgent.js
 
 function salesAgent(session) {
-  if (!session.name) {
-    return {
-      agent: "sales",
-      goal: "collect_basic_info",
-      status: "pending",
-      facts: {},
-      missing_fields: ["name"],
-      suggested_next_action: "ask_name",
-      updates: {
-        expected_field: "name",
-      },
-    };
-  }
+  const missing = [];
 
-  if (!session.phone) {
-    return {
-      agent: "sales",
-      goal: "collect_basic_info",
-      status: "pending",
-      facts: {},
-      missing_fields: ["phone"],
-      suggested_next_action: "ask_phone",
-      updates: {
-        expected_field: "phone",
-      },
-    };
-  }
+  if (!session.name) missing.push("name");
+  else if (!session.phone) missing.push("phone");
+  else if (!session.income) missing.push("income");
+  else if (!session.loan_amount) missing.push("loan_amount");
 
-  if (!session.income) {
-    return {
-      agent: "sales",
-      goal: "collect_basic_info",
-      status: "pending",
-      facts: {},
-      missing_fields: ["income"],
-      suggested_next_action: "ask_income",
-      updates: {
-        expected_field: "income",
-      },
-    };
-  }
-
-  if (!session.loan_amount) {
-    return {
-      agent: "sales",
-      goal: "collect_basic_info",
-      status: "pending",
-      facts: {},
-      missing_fields: ["loan_amount"],
-      suggested_next_action: "ask_loan_amount",
-      updates: {
-        expected_field: "loan_amount",
-      },
-    };
-  }
-
-  // All info collected
   return {
     agent: "sales",
-    goal: "collect_basic_info",
-    status: "complete",
+    goal: "collect_missing_info",
+    status: missing.length === 0 ? "complete" : "pending",
     facts: {},
-    missing_fields: [],
-    suggested_next_action: "handoff_to_verification",
-    updates: {
-      expected_field: null,
-    },
+    missing_fields: missing,
+    suggested_next_action: missing.length
+      ? `ask_${missing[0]}`
+      : "handoff_to_verification",
+    updates: {},
   };
 }
 
