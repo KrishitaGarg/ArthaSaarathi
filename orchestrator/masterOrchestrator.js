@@ -9,27 +9,31 @@ function decideNextActions(session) {
 
   if (!session.income || !session.loan_amount || !session.phone) {
     goal = "COLLECT_BASIC_INFO";
-  }
-  else if (
-    session.stage === "kyc_verification" &&
+  } else if (
+    session.stage !== "kyc_verification" &&
+    session.stage !== "underwriting" &&
+    session.stage !== "offer_presented" &&
+    session.stage !== "sanction_generated"
+  ) {
+    goal = "REQUEST_DOCUMENT_UPLOAD";
+    session.stage = "document_upload";
+  } else if (
+    session.stage === "document_upload" &&
     session.kyc_status !== "verified"
   ) {
     goal = "VERIFY_KYC";
-  }
-  else if (
+  } else if (
     session.kyc_status === "verified" &&
     session.eligibility_status !== "approved" &&
     session.underwriting_retry !== true
   ) {
     goal = "ASSESS_ELIGIBILITY";
-  }
-  else if (
+  } else if (
     session.eligibility_status === "approved" &&
     !session.sanction_letter_url
   ) {
     goal = "GENERATE_SANCTION";
-  }
-  else {
+  } else {
     goal = "COMPLETE_FLOW";
   }
 
@@ -39,6 +43,13 @@ function decideNextActions(session) {
         agent: "sales",
         reason: "Missing basic user information",
         missing_fields: getMissingFields(session),
+      });
+      break;
+
+    case "REQUEST_DOCUMENT_UPLOAD":
+      actions.push({
+        agent: "none",
+        reason: "Awaiting document upload for KYC verification",
       });
       break;
 

@@ -57,6 +57,8 @@ Use SESSION SNAPSHOT to decide:
 - Else if phone is missing → ask for phone number
 - Else if income is missing → ask for monthly income
 - Else if loan_amount is missing → ask for loan amount
+- Else if kyc_status is "pending" → ask user to provide documents (PAN, salary slip, employer details)
+- Else if kyc_status is not verified → explain KYC is being verified
 - Else if eligibility_status is not approved → explain eligibility is being checked
 - Else if sanction_letter_url is missing → inform sanction is being generated
 - Else → confirm loan sanction and close
