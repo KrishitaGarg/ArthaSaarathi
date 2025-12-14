@@ -48,11 +48,11 @@ router.post("/send", async (req, res) => {
     if (!session) {
       session = await Session.create({
         session_id: session_id || `sess_${Date.now()}`,
-        stage: "COLLECT_NAME",
+        stage: "inquiry", // ✅ VALID ENUM VALUE
       });
     }
 
-    // 🔒 HARD STOP — conversation already completed
+    // 🔒 HARD STOP — already sanctioned
     if (session.sanction_letter_url) {
       return res.status(200).json({
         session_id: session.session_id,
@@ -66,13 +66,15 @@ router.post("/send", async (req, res) => {
     const msg = message.toLowerCase().trim();
 
     // --------------------
-    // 2️⃣ SAFE NAME CAPTURE (ONLY at correct stage)
+    // 2️⃣ SAFE NAME CAPTURE (only when expected)
     // --------------------
-    if (!session.name && session.stage === "COLLECT_NAME") {
+    if (!session.name && session.expected_field === "name") {
       if (msg.startsWith("my name is")) {
         session.name = message.replace(/my name is/i, "").trim();
+        session.expected_field = null;
       } else if (isLikelyName(message)) {
         session.name = message.trim();
+        session.expected_field = null;
       }
     }
 
@@ -128,27 +130,11 @@ router.post("/send", async (req, res) => {
         Object.assign(session, result.updates);
       }
 
-      // 🔑 Capture what Sales Agent wants next
+      // 🔑 Sales agent controls next expected input
       if (result.agent === "sales" && result.missing_fields?.length > 0) {
         session.expected_field = result.missing_fields[0];
       }
     });
-
-    // --------------------
-    // 🔁 FIX: SYNC stage with expected_field (CRITICAL)
-    // --------------------
-    if (session.expected_field === "name") {
-      session.stage = "COLLECT_NAME";
-    }
-    if (session.expected_field === "phone") {
-      session.stage = "COLLECT_PHONE";
-    }
-    if (session.expected_field === "income") {
-      session.stage = "COLLECT_INCOME";
-    }
-    if (session.expected_field === "loan_amount") {
-      session.stage = "COLLECT_LOAN_AMOUNT";
-    }
 
     // --------------------
     // 6️⃣ Terminal state detection
@@ -158,7 +144,7 @@ router.post("/send", async (req, res) => {
       Boolean(session.sanction_letter_url);
 
     if (isTerminal) {
-      session.stage = "SANCTIONED";
+      session.stage = "sanction"; // ✅ VALID ENUM
     }
 
     await session.save();
