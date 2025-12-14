@@ -17,10 +17,7 @@ function extractNumber(text) {
 }
 
 function isLikelyName(text) {
-  return (
-    text.split(" ").length === 1 &&
-    /^[a-zA-Z]{2,}$/.test(text.trim())
-  );
+  return text.split(" ").length === 1 && /^[a-zA-Z]{2,}$/.test(text.trim());
 }
 
 // --------------------
@@ -48,27 +45,18 @@ router.post("/send", async (req, res) => {
     if (!session) {
       session = await Session.create({
         session_id: session_id || `sess_${Date.now()}`,
-        stage: "inquiry", 
+        stage: "inquiry",
         expected_field: "name",
-      });
-    }
-
-    // 🔒 HARD STOP — already sanctioned
-    if (session.sanction_letter_url) {
-      return res.status(200).json({
-        session_id: session.session_id,
-        stage: session.stage,
-        goal: "COMPLETE_FLOW",
-        ai_message:
-          "Your loan has already been sanctioned. The sanction letter is available. Thank you for choosing ArthaSaarthi.",
       });
     }
 
     const msg = message.toLowerCase().trim();
 
     // --------------------
-    // 2️⃣ SAFE NAME CAPTURE (only when expected)
+    // 2️⃣ Handle user input ONLY for expected_field
     // --------------------
+
+    // NAME
     if (!session.name && session.expected_field === "name") {
       if (msg.startsWith("my name is")) {
         session.name = message.replace(/my name is/i, "").trim();
@@ -79,36 +67,27 @@ router.post("/send", async (req, res) => {
       }
     }
 
-    // --------------------
-    // 3️⃣ HANDLE USER RESPONSE BASED ON EXPECTED FIELD
-    // --------------------
-    if (session.expected_field) {
-      const value = extractNumber(msg);
-
-      // PHONE
-      if (session.expected_field === "phone") {
-        if (/^\d{10}$/.test(msg)) {
-          session.phone = msg;
-          session.expected_field = null;
-        }
+    // PHONE
+    else if (session.expected_field === "phone") {
+      if (/^\d{10}$/.test(msg)) {
+        session.phone = msg;
+        session.expected_field = null;
       }
+    }
 
-      // INCOME
-      if (
-        session.expected_field === "income" &&
-        value &&
-        !session.income
-      ) {
+    // INCOME
+    else if (session.expected_field === "income") {
+      const value = extractNumber(msg);
+      if (value && !session.income) {
         session.income = value;
         session.expected_field = null;
       }
+    }
 
-      // LOAN AMOUNT
-      if (
-        session.expected_field === "loan_amount" &&
-        value &&
-        !session.loan_amount
-      ) {
+    // LOAN AMOUNT
+    else if (session.expected_field === "loan_amount") {
+      const value = extractNumber(msg);
+      if (value && !session.loan_amount) {
         session.loan_amount = value;
         session.expected_field = null;
       }
@@ -117,12 +96,25 @@ router.post("/send", async (req, res) => {
     await session.save();
 
     // --------------------
-    // 4️⃣ Orchestrator decides (THINK)
+    // 🔁 FORCE NEXT EXPECTED FIELD (STRICT ORDER)
+    // --------------------
+    if (!session.expected_field) {
+      if (!session.name) session.expected_field = "name";
+      else if (!session.phone) session.expected_field = "phone";
+      else if (!session.income) session.expected_field = "income";
+      else if (!session.loan_amount) session.expected_field = "loan_amount";
+      else session.expected_field = null;
+    }
+
+    await session.save();
+
+    // --------------------
+    // 3️⃣ Orchestrator (THINK)
     // --------------------
     const orchestration = decideNextActions(session);
 
     // --------------------
-    // 5️⃣ Agents execute (ACT)
+    // 4️⃣ Agents (ACT)
     // --------------------
     const agentResults = runAgents(session, orchestration.actions);
 
@@ -130,28 +122,22 @@ router.post("/send", async (req, res) => {
       if (result.updates) {
         Object.assign(session, result.updates);
       }
-
-      // 🔑 Sales agent controls next expected input
-      if (result.agent === "sales" && result.missing_fields?.length > 0) {
-        session.expected_field = result.missing_fields[0];
-      }
     });
-
-    // --------------------
-    // 6️⃣ Terminal state detection
-    // --------------------
-    const isTerminal =
-      orchestration.goal === "COMPLETE_FLOW" ||
-      Boolean(session.sanction_letter_url);
-
-    if (isTerminal) {
-      session.stage = "sanction"; // ✅ VALID ENUM
-    }
 
     await session.save();
 
     // --------------------
-    // 7️⃣ LLM Narration (SPEAK)
+    // 5️⃣ Terminal state (FINAL & CORRECT)
+    // --------------------
+    const isTerminal = orchestration.goal === "COMPLETE_FLOW";
+
+    if (isTerminal) {
+      session.stage = "sanction";
+      await session.save();
+    }
+
+    // --------------------
+    // 6️⃣ LLM Narration (SPEAK)
     // --------------------
     let aiResponse;
     try {
@@ -163,13 +149,14 @@ router.post("/send", async (req, res) => {
         isTerminal,
       });
     } catch (err) {
+      console.error("Narrator error:", err?.message || err);
       aiResponse = isTerminal
         ? "Your loan has been successfully sanctioned. The sanction letter is ready. Thank you for choosing ArthaSaarthi."
-        : "Thank you. Please continue with the next step.";
+        : "Please continue with the next step.";
     }
 
     // --------------------
-    // 8️⃣ Final response
+    // 7️⃣ Final response
     // --------------------
     res.status(200).json({
       session_id: session.session_id,
