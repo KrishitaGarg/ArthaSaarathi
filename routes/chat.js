@@ -48,16 +48,27 @@ router.post("/send", async (req, res) => {
     if (!session) {
       session = await Session.create({
         session_id: session_id || `sess_${Date.now()}`,
-        stage: "inquiry",
+        stage: "COLLECT_NAME",
+      });
+    }
+
+    // 🔒 HARD STOP — conversation already completed
+    if (session.sanction_letter_url) {
+      return res.status(200).json({
+        session_id: session.session_id,
+        stage: session.stage,
+        goal: "COMPLETE_FLOW",
+        ai_message:
+          "Your loan has already been sanctioned. The sanction letter is available. Thank you for choosing ArthaSaarthi.",
       });
     }
 
     const msg = message.toLowerCase().trim();
 
     // --------------------
-    // 2️⃣ SAFE NAME CAPTURE (only once)
+    // 2️⃣ SAFE NAME CAPTURE (ONLY at correct stage)
     // --------------------
-    if (!session.name) {
+    if (!session.name && session.stage === "COLLECT_NAME") {
       if (msg.startsWith("my name is")) {
         session.name = message.replace(/my name is/i, "").trim();
       } else if (isLikelyName(message)) {
@@ -112,7 +123,6 @@ router.post("/send", async (req, res) => {
     // --------------------
     const agentResults = runAgents(session, orchestration.actions);
 
-    // Apply updates from agents
     agentResults.forEach((result) => {
       if (result.updates) {
         Object.assign(session, result.updates);
@@ -124,7 +134,21 @@ router.post("/send", async (req, res) => {
       }
     });
 
-    await session.save();
+    // --------------------
+    // 🔁 FIX: SYNC stage with expected_field (CRITICAL)
+    // --------------------
+    if (session.expected_field === "name") {
+      session.stage = "COLLECT_NAME";
+    }
+    if (session.expected_field === "phone") {
+      session.stage = "COLLECT_PHONE";
+    }
+    if (session.expected_field === "income") {
+      session.stage = "COLLECT_INCOME";
+    }
+    if (session.expected_field === "loan_amount") {
+      session.stage = "COLLECT_LOAN_AMOUNT";
+    }
 
     // --------------------
     // 6️⃣ Terminal state detection
@@ -132,6 +156,12 @@ router.post("/send", async (req, res) => {
     const isTerminal =
       orchestration.goal === "COMPLETE_FLOW" ||
       Boolean(session.sanction_letter_url);
+
+    if (isTerminal) {
+      session.stage = "SANCTIONED";
+    }
+
+    await session.save();
 
     // --------------------
     // 7️⃣ LLM Narration (SPEAK)
