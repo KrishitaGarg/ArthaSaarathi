@@ -7,6 +7,7 @@ export default function DocumentUpload({ sessionId, onUploaded }) {
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState(null);
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   const onDrop = useCallback(
     async (acceptedFiles) => {
@@ -21,10 +22,17 @@ export default function DocumentUpload({ sessionId, onUploaded }) {
       formData.append("session_id", sessionId);
 
       try {
-        const res = await fetch("/api/documents/upload", {
+        const res = await fetch(`${API_BASE}/api/documents/upload`, {
           method: "POST",
           body: formData,
         });
+
+        if (!res.ok) {
+          setStatus("Upload failed. Try again.");
+          setUploading(false);
+          return;
+        }
+
         const data = await res.json();
         setStatus("Uploaded & processed successfully");
         onUploaded && onUploaded(data);
