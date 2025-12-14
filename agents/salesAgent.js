@@ -7,6 +7,7 @@ function salesAgent(session) {
   else if (!session.phone) missing.push("phone");
   else if (!session.income) missing.push("income");
   else if (!session.loan_amount) missing.push("loan_amount");
+  else if (!session.kyc_status) missing.push("documents"); // 🔑 ADD THIS
 
   return {
     agent: "sales",

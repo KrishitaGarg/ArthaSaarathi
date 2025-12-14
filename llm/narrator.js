@@ -49,9 +49,9 @@ FIELD LOCKING:
 If a field exists in SESSION SNAPSHOT, it is LOCKED and must not be asked again.
 
 -----------------------
-WHAT TO ASK NEXT (STRICT):
+WHAT TO ASK NEXT (STRICT ORDER):
 
-Use SESSION SNAPSHOT to decide:
+Use SESSION SNAPSHOT and follow this EXACT order:
 
 - If name is missing → ask for name
 - Else if phone is missing → ask for phone number
