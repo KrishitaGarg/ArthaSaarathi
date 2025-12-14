@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useRef, useEffect } from "react";
 import MessageBubble from "./MessageBubble";
 import InputField from "./InputField";
@@ -8,76 +9,110 @@ export default function ChatContainer() {
   const [messages, setMessages] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
   const [canUpload, setCanUpload] = useState(false);
-  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
+
+  const [sessionId] = useState(() =>
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : Math.random().toString(36).substring(2, 10)
+  );
+
   const messagesEndRef = useRef(null);
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+  console.log("🔵 API Base URL Loaded:", API_BASE);
+  console.log("🟣 Session ID:", sessionId);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, isTyping]);
 
   const handleSend = async (message) => {
+    if (!message?.trim()) return;
+
+    if (!API_BASE) {
+      console.error("❌ API base URL is missing");
+      return;
+    }
+
     const userMsg = {
-      id: Date.now(),
+      id: crypto.randomUUID(),
       text: message,
       sender: "user",
       timestamp: new Date(),
     };
+
     setMessages((prev) => [...prev, userMsg]);
-
     setIsTyping(true);
-    const res = await fetch("/api/chat/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, session_id: sessionId }),
-    });
-    const data = await res.json();
-    setIsTyping(false);
 
-    const botMsg = {
-      id: Date.now() + 1,
-      text: data.bot_response,
-      sender: "bot",
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, botMsg]);
+    try {
+      const res = await fetch(`${API_BASE}/api/chat/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message,
+          session_id: sessionId,
+        }),
+      });
 
-    if (data.next_action === "upload_docs") {
-      setCanUpload(true);
+      const rawText = await res.text();
+      console.log("📨 Raw Response:", rawText);
+
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        throw new Error("Invalid JSON from backend");
+      }
+
+      const botMsg = {
+        id: crypto.randomUUID(),
+        text: data?.ai_message || "Sorry, something went wrong.",
+        sender: "bot",
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, botMsg]);
+
+      if (data?.next_action === "upload_docs") {
+        setCanUpload(true);
+      }
+    } catch (err) {
+      console.error("❌ Chat error:", err);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          text: "⚠️ Unable to connect to server. Please try again.",
+          sender: "bot",
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      setIsTyping(false);
     }
-
-    // optional: save stage
-    await fetch("/api/session/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        session_id: sessionId,
-        stage: canUpload ? "documents" : "chat",
-      }),
-    });
   };
 
   const handleUploaded = async (ocrData) => {
+    console.log("📤 Document uploaded:", ocrData);
+
     setCanUpload(false);
 
     const infoMsg = {
-      id: Date.now(),
+      id: crypto.randomUUID(),
       text: "Document submitted ✅",
       sender: "user",
       timestamp: new Date(),
     };
+
     const followupMsg = {
-      id: Date.now() + 1,
+      id: crypto.randomUUID(),
       text: "Thanks for uploading your documents. I’m checking your eligibility and EMI options now.",
       sender: "bot",
       timestamp: new Date(),
     };
-    setMessages((prev) => [...prev, infoMsg, followupMsg]);
 
-    await fetch("/api/session/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sessionId, stage: "docs_uploaded" }),
-    });
+    setMessages((prev) => [...prev, infoMsg, followupMsg]);
   };
 
   return (
@@ -98,6 +133,7 @@ export default function ChatContainer() {
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
+
         {isTyping && (
           <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-2xl">
             <div className="flex gap-1 mt-1">
@@ -110,6 +146,7 @@ export default function ChatContainer() {
             </span>
           </div>
         )}
+
         <div ref={messagesEndRef} />
       </div>
 
@@ -118,7 +155,6 @@ export default function ChatContainer() {
         {canUpload && (
           <DocumentUpload sessionId={sessionId} onUploaded={handleUploaded} />
         )}
-
         <InputField onSend={handleSend} />
       </div>
     </div>
