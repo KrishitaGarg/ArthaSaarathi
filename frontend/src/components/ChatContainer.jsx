@@ -9,32 +9,38 @@ export default function ChatContainer() {
   const [messages, setMessages] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
   const [canUpload, setCanUpload] = useState(false);
-
-  const [sessionId] = useState(() =>
-    typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID()
-      : Math.random().toString(36).substring(2, 10)
-  );
+  const [sessionId, setSessionId] = useState(null);
 
   const messagesEndRef = useRef(null);
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+  /* ----------------------------------
+     Generate sessionId ONLY on client
+  -----------------------------------*/
+  useEffect(() => {
+    const id =
+      crypto?.randomUUID?.() ?? Math.random().toString(36).substring(2, 10);
+    setSessionId(id);
+  }, []);
+
+  /* ----------------------------------
+     Auto-scroll
+  -----------------------------------*/
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
+  /* ----------------------------------
+     Send message
+  -----------------------------------*/
   const handleSend = async (message) => {
-    if (!message?.trim()) return;
-
-    if (!API_BASE) {
-      return;
-    }
+    if (!message?.trim() || !API_BASE || !sessionId) return;
 
     const userMsg = {
       id: crypto.randomUUID(),
       text: message,
       sender: "user",
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -51,7 +57,6 @@ export default function ChatContainer() {
       });
 
       const rawText = await res.text();
-
       let data;
       try {
         data = JSON.parse(rawText);
@@ -61,9 +66,9 @@ export default function ChatContainer() {
 
       const botMsg = {
         id: crypto.randomUUID(),
-        text: data?.ai_message || "Sorry, something went wrong.",
+        text: data?.ai_message ?? "Sorry, something went wrong.",
         sender: "bot",
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
       };
 
       setMessages((prev) => [...prev, botMsg]);
@@ -78,7 +83,7 @@ export default function ChatContainer() {
           id: crypto.randomUUID(),
           text: "⚠️ Unable to connect to server. Please try again.",
           sender: "bot",
-          timestamp: new Date(),
+          timestamp: new Date().toISOString(),
         },
       ]);
     } finally {
@@ -86,25 +91,33 @@ export default function ChatContainer() {
     }
   };
 
-  const handleUploaded = async (ocrData) => {
+  /* ----------------------------------
+     Document upload handler
+  -----------------------------------*/
+  const handleUploaded = () => {
     setCanUpload(false);
 
-    const infoMsg = {
-      id: crypto.randomUUID(),
-      text: "Document submitted ✅",
-      sender: "user",
-      timestamp: new Date(),
-    };
-
-    const followupMsg = {
-      id: crypto.randomUUID(),
-      text: "Thanks for uploading your documents. I’m checking your eligibility and EMI options now.",
-      sender: "bot",
-      timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, infoMsg, followupMsg]);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        text: "Document submitted ✅",
+        sender: "user",
+        timestamp: new Date().toISOString(),
+      },
+      {
+        id: crypto.randomUUID(),
+        text: "Thanks for uploading your documents. I’m checking your eligibility and EMI options now.",
+        sender: "bot",
+        timestamp: new Date().toISOString(),
+      },
+    ]);
   };
+
+  /* ----------------------------------
+     Prevent hydration crash
+  -----------------------------------*/
+  if (!sessionId) return null;
 
   return (
     <div className="fixed inset-0 w-full h-full bg-white flex flex-col z-50">
@@ -120,7 +133,7 @@ export default function ChatContainer() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300">
+      <div className="flex-1 p-4 overflow-y-auto">
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
