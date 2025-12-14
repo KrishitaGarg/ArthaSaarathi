@@ -2,23 +2,35 @@
 
 import { useEffect, useState } from "react";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+
 export default function EMISlider({ loanAmount = 500000, onChange }) {
   const [tenure, setTenure] = useState(24);
   const [emi, setEmi] = useState(0);
+  const [loading, setLoading] = useState(false);
 
-  const calcEMI = (principal, months) => {
-    const rate = 0.12 / 12; // 12% yearly → monthly (0.01)
-    const emiVal =
-      (principal * rate * Math.pow(1 + rate, months)) /
-      (Math.pow(1 + rate, months) - 1);
-    return Math.round(emiVal);
+  const fetchEmi = async (amount, months) => {
+    if (!API_BASE) return;
+    try {
+      setLoading(true);
+      const res = await fetch(
+        `${API_BASE}/api/loan/emi?amount=${amount}&tenure=${months}`
+      );
+      const data = await res.json();
+      if (data.monthly_emi) {
+        setEmi(data.monthly_emi);
+        onChange && onChange(data.monthly_emi, months, data);
+      }
+    } catch (e) {
+      // fallback: keep previous EMI or 0
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    const e = calcEMI(loanAmount, tenure);
-    setEmi(e);
-    onChange && onChange(e, tenure);
-  }, [loanAmount, tenure, onChange]);
+    fetchEmi(loanAmount, tenure);
+  }, [loanAmount, tenure]);
 
   const affordability =
     emi < 20000 ? "Comfortable" : emi < 40000 ? "Manageable" : "High";
@@ -28,7 +40,7 @@ export default function EMISlider({ loanAmount = 500000, onChange }) {
       <div className="flex justify-between items-center mb-2">
         <span className="font-medium">Estimated EMI</span>
         <span className="text-lg font-bold text-slate-800">
-          ₹{emi.toLocaleString()}
+          {loading ? "…" : `₹${emi.toLocaleString()}`}
         </span>
       </div>
 
@@ -47,20 +59,22 @@ export default function EMISlider({ loanAmount = 500000, onChange }) {
         <span>60 months</span>
       </div>
 
-      <div className="mt-2 flex items-center gap-2">
-        <span
-          className={`w-2 h-2 rounded-full ${
-            affordability === "Comfortable"
-              ? "bg-emerald-500"
-              : affordability === "Manageable"
-              ? "bg-amber-500"
-              : "bg-red-500"
-          }`}
-        />
-        <span className="text-[11px] text-slate-700">
-          {affordability} for ₹{emi.toLocaleString()} per month
-        </span>
-      </div>
+      {!loading && (
+        <div className="mt-2 flex items-center gap-2">
+          <span
+            className={`w-2 h-2 rounded-full ${
+              affordability === "Comfortable"
+                ? "bg-emerald-500"
+                : affordability === "Manageable"
+                ? "bg-amber-500"
+                : "bg-red-500"
+            }`}
+          />
+          <span className="text-[11px] text-slate-700">
+            {affordability} for ₹{emi.toLocaleString()} per month
+          </span>
+        </div>
+      )}
     </div>
   );
 }
