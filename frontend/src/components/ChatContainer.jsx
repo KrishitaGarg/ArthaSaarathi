@@ -19,9 +19,6 @@ export default function ChatContainer() {
   const messagesEndRef = useRef(null);
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-  console.log("🔵 API Base URL Loaded:", API_BASE);
-  console.log("🟣 Session ID:", sessionId);
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
@@ -30,7 +27,6 @@ export default function ChatContainer() {
     if (!message?.trim()) return;
 
     if (!API_BASE) {
-      console.error("❌ API base URL is missing");
       return;
     }
 
@@ -55,7 +51,6 @@ export default function ChatContainer() {
       });
 
       const rawText = await res.text();
-      console.log("📨 Raw Response:", rawText);
 
       let data;
       try {
@@ -77,8 +72,6 @@ export default function ChatContainer() {
         setCanUpload(true);
       }
     } catch (err) {
-      console.error("❌ Chat error:", err);
-
       setMessages((prev) => [
         ...prev,
         {
@@ -94,8 +87,6 @@ export default function ChatContainer() {
   };
 
   const handleUploaded = async (ocrData) => {
-    console.log("📤 Document uploaded:", ocrData);
-
     setCanUpload(false);
 
     const infoMsg = {
