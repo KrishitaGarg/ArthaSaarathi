@@ -48,7 +48,8 @@ router.post("/send", async (req, res) => {
     if (!session) {
       session = await Session.create({
         session_id: session_id || `sess_${Date.now()}`,
-        stage: "inquiry", // ✅ VALID ENUM VALUE
+        stage: "inquiry", 
+        expected_field: "name",
       });
     }
 
