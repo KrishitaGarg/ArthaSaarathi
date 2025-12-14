@@ -9,15 +9,11 @@ const {
 const narrateConversation = require("../llm/narrator");
 
 // --------------------
-// Utility helpers
+// Utilities
 // --------------------
 function extractNumber(text) {
   const match = text.match(/\d+/);
   return match ? Number(match[0]) : null;
-}
-
-function isLikelyName(text) {
-  return text.split(" ").length === 1 && /^[a-zA-Z]{2,}$/.test(text.trim());
 }
 
 // --------------------
@@ -46,64 +42,41 @@ router.post("/send", async (req, res) => {
       session = await Session.create({
         session_id: session_id || `sess_${Date.now()}`,
         stage: "inquiry",
-        expected_field: "name",
       });
     }
 
-    const msg = message.toLowerCase().trim();
+    const msg = message.toLowerCase();
 
     // --------------------
-    // 2️⃣ Handle user input ONLY for expected_field
+    // 2️⃣ SIMPLE FACT EXTRACTION (NO HUMAN LOGIC)
     // --------------------
 
     // NAME
-    if (!session.name && session.expected_field === "name") {
+    if (!session.name) {
       if (msg.startsWith("my name is")) {
         session.name = message.replace(/my name is/i, "").trim();
-        session.expected_field = null;
-      } else if (isLikelyName(message)) {
-        session.name = message.trim();
-        session.expected_field = null;
       }
     }
 
     // PHONE
-    else if (session.expected_field === "phone") {
-      if (/^\d{10}$/.test(msg)) {
-        session.phone = msg;
-        session.expected_field = null;
-      }
+    if (!session.phone) {
+      const phoneMatch = msg.match(/\b\d{10}\b/);
+      if (phoneMatch) session.phone = phoneMatch[0];
     }
 
     // INCOME
-    else if (session.expected_field === "income") {
-      const value = extractNumber(msg);
-      if (value && !session.income) {
-        session.income = value;
-        session.expected_field = null;
-      }
+    if (!session.income && (msg.includes("income") || msg.includes("salary"))) {
+      const income = extractNumber(msg);
+      if (income) session.income = income;
     }
 
     // LOAN AMOUNT
-    else if (session.expected_field === "loan_amount") {
-      const value = extractNumber(msg);
-      if (value && !session.loan_amount) {
-        session.loan_amount = value;
-        session.expected_field = null;
-      }
-    }
-
-    await session.save();
-
-    // --------------------
-    // 🔁 FORCE NEXT EXPECTED FIELD (STRICT ORDER)
-    // --------------------
-    if (!session.expected_field) {
-      if (!session.name) session.expected_field = "name";
-      else if (!session.phone) session.expected_field = "phone";
-      else if (!session.income) session.expected_field = "income";
-      else if (!session.loan_amount) session.expected_field = "loan_amount";
-      else session.expected_field = null;
+    if (
+      !session.loan_amount &&
+      (msg.includes("loan") || msg.includes("amount"))
+    ) {
+      const amount = extractNumber(msg);
+      if (amount) session.loan_amount = amount;
     }
 
     await session.save();
@@ -127,17 +100,14 @@ router.post("/send", async (req, res) => {
     await session.save();
 
     // --------------------
-    // 5️⃣ Terminal state (FINAL & CORRECT)
+    // 5️⃣ Terminal detection
     // --------------------
-    const isTerminal = orchestration.goal === "COMPLETE_FLOW";
-
-    if (isTerminal) {
-      session.stage = "sanction";
-      await session.save();
-    }
+    const isTerminal =
+      orchestration.goal === "COMPLETE_FLOW" ||
+      Boolean(session.sanction_letter_url);
 
     // --------------------
-    // 6️⃣ LLM Narration (SPEAK)
+    // 6️⃣ Narration (SPEAK)
     // --------------------
     let aiResponse;
     try {
@@ -149,14 +119,14 @@ router.post("/send", async (req, res) => {
         isTerminal,
       });
     } catch (err) {
-      console.error("Narrator error:", err?.message || err);
+      console.error("Narrator error:", err.message);
       aiResponse = isTerminal
         ? "Your loan has been successfully sanctioned. The sanction letter is ready. Thank you for choosing ArthaSaarthi."
         : "Please continue with the next step.";
     }
 
     // --------------------
-    // 7️⃣ Final response
+    // 7️⃣ Response
     // --------------------
     res.status(200).json({
       session_id: session.session_id,
