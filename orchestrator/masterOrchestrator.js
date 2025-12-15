@@ -7,25 +7,43 @@ function decideNextActions(session) {
   const actions = [];
   let goal = null;
 
+  // 1️⃣ Collect basic info
   if (!session.income || !session.loan_amount || !session.phone) {
     goal = "COLLECT_BASIC_INFO";
-  } else if (
+  }
+
+  // 2️⃣ Ask for document upload if KYC not done yet
+  else if (!session.kyc_status) {
+    goal = "REQUEST_DOCUMENT_UPLOAD";
+  }
+
+  // 3️⃣ Verify KYC after documents are uploaded
+  else if (
     session.stage === "kyc_verification" &&
     session.kyc_status !== "verified"
   ) {
     goal = "VERIFY_KYC";
-  } else if (
+  }
+
+  // 4️⃣ Assess eligibility only AFTER KYC is verified
+  else if (
     session.kyc_status === "verified" &&
     session.eligibility_status !== "approved" &&
     session.underwriting_retry !== true
   ) {
     goal = "ASSESS_ELIGIBILITY";
-  } else if (
+  }
+
+  // 5️⃣ Generate sanction
+  else if (
     session.eligibility_status === "approved" &&
     !session.sanction_letter_url
   ) {
     goal = "GENERATE_SANCTION";
-  } else {
+  }
+
+  // 6️⃣ Done
+  else {
     goal = "COMPLETE_FLOW";
   }
 
@@ -38,10 +56,17 @@ function decideNextActions(session) {
       });
       break;
 
+    case "REQUEST_DOCUMENT_UPLOAD":
+      actions.push({
+        agent: "none",
+        reason: "Awaiting PAN and salary document upload",
+      });
+      break;
+
     case "VERIFY_KYC":
       actions.push({
         agent: "verification",
-        reason: "Factual KYC completed, decision required",
+        reason: "Documents uploaded, verify KYC",
       });
       break;
 
@@ -69,6 +94,7 @@ function decideNextActions(session) {
 
   return { goal, actions };
 }
+
 
 function runAgents(session, actions) {
   const results = [];
