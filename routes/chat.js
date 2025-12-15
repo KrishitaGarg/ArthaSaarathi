@@ -48,29 +48,23 @@ router.post("/send", async (req, res) => {
     const msg = message.toLowerCase();
 
     // --------------------
-    // 2️⃣ SIMPLE FACT EXTRACTION (NO HUMAN LOGIC)
+    // 2️⃣ SIMPLE FACT EXTRACTION
     // --------------------
 
-    // NAME
-    if (!session.name) {
-      if (msg.startsWith("my name is")) {
-        session.name = message.replace(/my name is/i, "").trim();
-      }
+    if (!session.name && msg.startsWith("my name is")) {
+      session.name = message.replace(/my name is/i, "").trim();
     }
 
-    // PHONE
     if (!session.phone) {
       const phoneMatch = msg.match(/\b\d{10}\b/);
       if (phoneMatch) session.phone = phoneMatch[0];
     }
 
-    // INCOME
     if (!session.income && (msg.includes("income") || msg.includes("salary"))) {
       const income = extractNumber(msg);
       if (income) session.income = income;
     }
 
-    // LOAN AMOUNT
     if (
       !session.loan_amount &&
       (msg.includes("loan") || msg.includes("amount"))
@@ -91,9 +85,22 @@ router.post("/send", async (req, res) => {
     // --------------------
     const agentResults = runAgents(session, orchestration.actions);
 
+    let next_action = null; // 🔑 ADD
+    let goal = orchestration.goal; // 🔑 ADD
+
     agentResults.forEach((result) => {
       if (result.updates) {
         Object.assign(session, result.updates);
+      }
+
+      // 🔑 HARD MAP: sales → upload docs
+      if (
+        result.agent === "sales" &&
+        result.suggested_next_action === "upload_docs"
+      ) {
+        next_action = "upload_docs";
+        goal = "COLLECT_DOCUMENTS";
+        session.stage = "documents";
       }
     });
 
@@ -103,7 +110,7 @@ router.post("/send", async (req, res) => {
     // 5️⃣ Terminal detection
     // --------------------
     const isTerminal =
-      orchestration.goal === "COMPLETE_FLOW" ||
+      goal === "COMPLETE_FLOW" ||
       Boolean(session.sanction_letter_url);
 
     // --------------------
@@ -113,7 +120,7 @@ router.post("/send", async (req, res) => {
     try {
       aiResponse = await narrateConversation({
         session,
-        goal: orchestration.goal,
+        goal,
         agentResults,
         isFirstInteraction,
         isTerminal,
@@ -122,16 +129,17 @@ router.post("/send", async (req, res) => {
       console.error("Narrator error:", err.message);
       aiResponse = isTerminal
         ? "Your loan has been successfully sanctioned. The sanction letter is ready. Thank you for choosing ArthaSaarthi."
-        : "Please continue with the next step.";
+        : "Now please upload your PAN card and latest salary slip to continue.";
     }
 
     // --------------------
-    // 7️⃣ Response
+    // 7️⃣ Response (🔑 FRONTEND SIGNAL)
     // --------------------
     res.status(200).json({
       session_id: session.session_id,
       stage: session.stage,
-      goal: orchestration.goal,
+      goal,
+      next_action, // 🔑 THIS UNBLOCKS FRONTEND
       agents_called: agentResults.map((r) => r.agent),
       agent_results: agentResults,
       ai_message: aiResponse,
