@@ -1,6 +1,8 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const Groq = require("groq-sdk");
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+});
 
 async function narrateConversation({
   session,
@@ -9,10 +11,6 @@ async function narrateConversation({
   isTerminal = false,
   isFirstInteraction = false,
 }) {
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-  });
-
   const prompt = `
 You are "ArthaSaarthi", an AI-powered Loan Assistant for a financial institution.
 
@@ -97,8 +95,18 @@ ${JSON.stringify(agentResults, null, 2)}
 Generate ONE correct response strictly following the rules.
 `;
 
-  const result = await model.generateContent(prompt);
-  return result.response.text();
+  const result = await groq.chat.completions.create({
+    model: "llama-3.1-8b-instant",
+    messages: [
+      {
+        role: "user",
+        content: prompt,
+      },
+    ],
+    temperature: 0.3,
+  });
+
+  return result.choices[0].message.content;
 }
 
 module.exports = narrateConversation;
