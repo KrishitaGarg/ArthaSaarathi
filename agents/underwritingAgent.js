@@ -15,24 +15,6 @@ function getInterestRate({ riskScore, tenure }) {
 }
 
 function underwritingAgent(session) {
-  // 🔑 MVP SAFETY: underwriting already done upstream
-  if (session.offers && session.offers.length > 0) {
-    return {
-      agent: "underwriting",
-      goal: "assess_eligibility",
-      status: "approved",
-      facts: {
-        approved_amount: session.loan_amount,
-      },
-      missing_fields: [],
-      suggested_next_action: "handoff_to_sanction",
-      updates: {
-        eligibility_status: "approved",
-        underwriting_retry: false,
-      },
-    };
-  }
-
   const income = session.income;
   const requestedAmount = session.loan_amount;
   const riskScore = session.risk_score || 0;
