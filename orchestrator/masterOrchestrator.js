@@ -12,37 +12,26 @@ function decideNextActions(session) {
     goal = "COLLECT_BASIC_INFO";
   }
 
-  // 2️⃣ Ask for document upload if KYC not started
-  else if (!session.kyc_status) {
-    goal = "REQUEST_DOCUMENT_UPLOAD";
-  }
-
-  // 3️⃣ Verify KYC after documents uploaded
-  else if (
-    session.stage === "kyc_verification" &&
-    session.kyc_status !== "verified"
-  ) {
-    goal = "VERIFY_KYC";
-  }
-
-  // 4️⃣ Assess eligibility only AFTER KYC verified
+  // 2️⃣ Assess eligibility AFTER KYC verified
   else if (
     session.kyc_status === "verified" &&
-    session.eligibility_status !== "approved" &&
-    session.underwriting_retry !== true
+    !session.sanction_letter_url &&
+    (!session.eligibility_status || session.eligibility_status !== "approved") &&
+    !session.underwriting_retry
   ) {
     goal = "ASSESS_ELIGIBILITY";
   }
 
-  // 5️⃣ Generate sanction
+  // 3️⃣ Generate sanction if offer / approval exists
   else if (
-    session.eligibility_status === "approved" &&
+    (session.eligibility_status === "approved" ||
+      (session.offers && session.offers.length > 0)) &&
     !session.sanction_letter_url
   ) {
     goal = "GENERATE_SANCTION";
   }
 
-  // 6️⃣ Done
+  // 4️⃣ Done
   else {
     goal = "COMPLETE_FLOW";
   }
@@ -53,20 +42,6 @@ function decideNextActions(session) {
         agent: "sales",
         reason: "Missing basic user information",
         missing_fields: getMissingFields(session),
-      });
-      break;
-
-    case "REQUEST_DOCUMENT_UPLOAD":
-      actions.push({
-        agent: "none",
-        reason: "Request PAN and salary document upload",
-      });
-      break;
-
-    case "VERIFY_KYC":
-      actions.push({
-        agent: "verification",
-        reason: "Verify uploaded KYC documents",
       });
       break;
 
@@ -94,7 +69,6 @@ function decideNextActions(session) {
 
   return { goal, actions };
 }
-
 
 function runAgents(session, actions) {
   const results = [];

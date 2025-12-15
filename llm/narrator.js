@@ -57,7 +57,7 @@ Use SESSION SNAPSHOT and follow this EXACT order:
 3️⃣ Else if income is missing → Ask for monthly income  
 4️⃣ Else if loan_amount is missing → Ask for required loan amount  
 5️⃣ Else if kyc_status is missing → Ask the user to upload PAN card and salary document  
-6️⃣ Else if eligibility_status is not approved → Inform the user their eligibility is being evaluated → DO NOT ask questions  
+6️⃣ Else if eligibility_status exists AND is not approved → Inform the user their eligibility is being evaluated → DO NOT ask questions  
 7️⃣ Else if sanction_letter_url is missing → Inform the user that the sanction letter is being generated → DO NOT ask questions  
 8️⃣ Else → Confirm loan sanction → Mention sanction letter availability → Thank the user and close the conversation  
 
@@ -80,6 +80,7 @@ ${JSON.stringify(
     loan_amount: session.loan_amount,
     kyc_status: session.kyc_status,
     eligibility_status: session.eligibility_status,
+    sanction_letter_url: session.sanction_letter_url,
     stage: session.stage,
   },
   null,

@@ -3,15 +3,34 @@
 const { generateSanctionPDF } = require("../tools/pdf");
 
 function sanctionAgent(session) {
-  // Safety check
-  if (!session.offers || session.offers.length === 0) {
+  // 🔑 SAFETY: ensure loan amount exists
+  if (!session.loan_amount) {
     return null;
   }
 
-  // For demo: select first approved offer
-  const selectedOffer = session.offers[0];
+  // 🔑 MVP: ensure at least one approved offer exists
+  if (!session.offers || session.offers.length === 0) {
+    session.offers = [
+      {
+        offer_id: `offer_${Date.now()}`,
+        amount: session.loan_amount,
+        tenure_months: 24,
+        interest_rate: 10.5,
+        status: "approved",
+      },
+    ];
+  }
 
-  // Generate real PDF
+  // Select first approved offer
+  const selectedOffer = session.offers.find(
+    (offer) => offer.status === "approved"
+  );
+
+  if (!selectedOffer) {
+    return null;
+  }
+
+  // Generate sanction PDF
   const sanctionUrl = generateSanctionPDF({
     session,
     offer: selectedOffer,

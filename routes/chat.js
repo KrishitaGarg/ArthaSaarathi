@@ -50,7 +50,6 @@ router.post("/send", async (req, res) => {
     // --------------------
     // 2️⃣ SIMPLE FACT EXTRACTION
     // --------------------
-
     if (!session.name && msg.startsWith("my name is")) {
       session.name = message.replace(/my name is/i, "").trim();
     }
@@ -85,24 +84,47 @@ router.post("/send", async (req, res) => {
     // --------------------
     const agentResults = runAgents(session, orchestration.actions);
 
-    let next_action = null; // 🔑 ADD
-    let goal = orchestration.goal; // 🔑 ADD
+    let next_action = null;
+    let goal = orchestration.goal;
+    let forceDocumentUpload = false;
 
     agentResults.forEach((result) => {
       if (result.updates) {
         Object.assign(session, result.updates);
       }
 
-      // 🔑 HARD MAP: sales → upload docs
+      // 🔑 HARD OVERRIDE: sales → upload documents
       if (
         result.agent === "sales" &&
         result.suggested_next_action === "upload_docs"
       ) {
+        forceDocumentUpload = true;
         next_action = "upload_docs";
         goal = "COLLECT_DOCUMENTS";
         session.stage = "documents";
       }
+
+      // 🔑 HARD OVERRIDE: sanction generated
+      if (
+        result.agent === "sanction" &&
+        result.updates?.sanction_letter_url
+      ) {
+        goal = "COMPLETE_FLOW";
+        session.stage = "sanction_generated";
+      }
     });
+
+    // 🔑 FINAL GUARANTEE: document upload cannot be overridden
+    if (forceDocumentUpload) {
+      goal = "COLLECT_DOCUMENTS";
+      session.stage = "documents";
+    }
+
+    // 🔑 FINAL GUARANTEE: sanction ends the flow
+    if (session.sanction_letter_url) {
+      goal = "COMPLETE_FLOW";
+      session.stage = "sanction_generated";
+    }
 
     await session.save();
 
@@ -139,7 +161,7 @@ router.post("/send", async (req, res) => {
       session_id: session.session_id,
       stage: session.stage,
       goal,
-      next_action, // 🔑 THIS UNBLOCKS FRONTEND
+      next_action,
       agents_called: agentResults.map((r) => r.agent),
       agent_results: agentResults,
       ai_message: aiResponse,
