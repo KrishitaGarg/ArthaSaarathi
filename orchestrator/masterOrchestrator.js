@@ -12,12 +12,12 @@ function decideNextActions(session) {
     goal = "COLLECT_BASIC_INFO";
   }
 
-  // 2️⃣ Ask for document upload if KYC not done yet
+  // 2️⃣ Ask for document upload if KYC not started
   else if (!session.kyc_status) {
     goal = "REQUEST_DOCUMENT_UPLOAD";
   }
 
-  // 3️⃣ Verify KYC after documents are uploaded
+  // 3️⃣ Verify KYC after documents uploaded
   else if (
     session.stage === "kyc_verification" &&
     session.kyc_status !== "verified"
@@ -25,7 +25,7 @@ function decideNextActions(session) {
     goal = "VERIFY_KYC";
   }
 
-  // 4️⃣ Assess eligibility only AFTER KYC is verified
+  // 4️⃣ Assess eligibility only AFTER KYC verified
   else if (
     session.kyc_status === "verified" &&
     session.eligibility_status !== "approved" &&
@@ -59,14 +59,14 @@ function decideNextActions(session) {
     case "REQUEST_DOCUMENT_UPLOAD":
       actions.push({
         agent: "none",
-        reason: "Awaiting PAN and salary document upload",
+        reason: "Request PAN and salary document upload",
       });
       break;
 
     case "VERIFY_KYC":
       actions.push({
         agent: "verification",
-        reason: "Documents uploaded, verify KYC",
+        reason: "Verify uploaded KYC documents",
       });
       break;
 
