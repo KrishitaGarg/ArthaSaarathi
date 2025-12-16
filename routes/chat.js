@@ -126,10 +126,12 @@ router.post("/send", async (req, res) => {
       session.stage === "kyc_verified" &&
       msg.includes("ok")
     ) {
-      session.sanction_letter_url =
-        "https://demo-bank.com/sanction-letter.pdf";
+      const pdfUrl = generateSanctionPDF(session);
+
+      session.sanction_letter_url = pdfUrl;
       session.stage = "completed";
       goal = "COMPLETE_FLOW";
+
       await session.save();
     }
 
