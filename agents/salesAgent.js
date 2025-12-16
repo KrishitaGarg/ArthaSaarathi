@@ -3,10 +3,10 @@
 function salesAgent(session) {
   const missing = [];
 
-  // 🔒 ABSOLUTE STOP: never collect sales info after basic info is complete
+  // 🔒 ABSOLUTE STOP: never collect sales info after documents stage
   if (
-    session.stage === "basic_info_complete" ||
     session.stage === "documents" ||
+    session.stage === "kyc_verification" ||
     session.stage === "kyc_verified" ||
     session.stage === "offers" ||
     session.stage === "sanction_ready" ||
@@ -30,7 +30,6 @@ function salesAgent(session) {
   else if (session.income == null) missing.push("income");
   else if (session.loan_amount == null) missing.push("loan_amount");
 
-  // 🔁 Still collecting basic info
   if (missing.length > 0) {
     return {
       agent: "sales",
@@ -44,7 +43,7 @@ function salesAgent(session) {
     };
   }
 
-  // 🔒 Basic info just completed → handoff
+  // ✅ Trigger document upload ONCE
   return {
     agent: "sales",
     goal: "COLLECT_DOCUMENTS",
@@ -54,9 +53,7 @@ function salesAgent(session) {
     suggested_next_action: "upload_docs",
     ai_message:
       "Great! I have your basic details. Please upload your PAN card and latest salary slip to continue.",
-    updates: {
-      stage: "basic_info_complete",
-    },
+    updates: {},
   };
 }
 

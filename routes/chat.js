@@ -162,6 +162,11 @@ router.post("/send", async (req, res) => {
         session.stage = "documents";
       }
     });
+    // 🔒 FORCE upload UI when in documents stage (independent of agents)
+    if (session.stage === "documents") {
+      next_action = "upload_docs";
+    }
+
 
     // --------------------
     // 7️⃣ After KYC → Show Offers
