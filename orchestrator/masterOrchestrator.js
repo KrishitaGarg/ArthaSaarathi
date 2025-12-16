@@ -7,42 +7,27 @@ function decideNextActions(session) {
   const actions = [];
   let goal = null;
 
-  // 1️⃣ Collect basic info
+  // 1️⃣ Collect basic info (STRICT)
   if (!session.income || !session.loan_amount || !session.phone) {
     goal = "COLLECT_BASIC_INFO";
   }
 
-  // 2️⃣ Ask for document upload if KYC not started
-  else if (!session.kyc_status) {
+  // 2️⃣ HARD-CODED DOCUMENT UPLOAD STAGE (DEMO SAFE)
+  else if (session.stage === "documents") {
     goal = "REQUEST_DOCUMENT_UPLOAD";
   }
 
-  // 3️⃣ Verify KYC after documents uploaded
-  else if (
-    session.stage === "kyc_verification" &&
-    session.kyc_status !== "verified"
-  ) {
-    goal = "VERIFY_KYC";
+  // 3️⃣ HARD-CODED OFFER STAGE (after docs)
+  else if (session.stage === "offers") {
+    goal = "SHOW_OFFERS";
   }
 
-  // 4️⃣ Assess eligibility only AFTER KYC verified
-  else if (
-    session.kyc_status === "verified" &&
-    session.eligibility_status !== "approved" &&
-    session.underwriting_retry !== true
-  ) {
-    goal = "ASSESS_ELIGIBILITY";
-  }
-
-  // 5️⃣ Generate sanction
-  else if (
-    session.eligibility_status === "approved" &&
-    !session.sanction_letter_url
-  ) {
+  // 4️⃣ Generate sanction after offer selected
+  else if (session.stage === "sanction") {
     goal = "GENERATE_SANCTION";
   }
 
-  // 6️⃣ Done
+  // 5️⃣ Done
   else {
     goal = "COMPLETE_FLOW";
   }
@@ -59,28 +44,21 @@ function decideNextActions(session) {
     case "REQUEST_DOCUMENT_UPLOAD":
       actions.push({
         agent: "none",
-        reason: "Request PAN and salary document upload",
+        reason: "Show document upload UI to user",
       });
       break;
 
-    case "VERIFY_KYC":
+    case "SHOW_OFFERS":
       actions.push({
-        agent: "verification",
-        reason: "Verify uploaded KYC documents",
-      });
-      break;
-
-    case "ASSESS_ELIGIBILITY":
-      actions.push({
-        agent: "underwriting",
-        reason: "KYC verified, assess eligibility",
+        agent: "none",
+        reason: "Show loan offers for selection",
       });
       break;
 
     case "GENERATE_SANCTION":
       actions.push({
         agent: "sanction",
-        reason: "Eligibility approved, generate sanction",
+        reason: "Generate sanction letter for selected offer",
       });
       break;
 
@@ -94,7 +72,6 @@ function decideNextActions(session) {
 
   return { goal, actions };
 }
-
 
 function runAgents(session, actions) {
   const results = [];
@@ -132,9 +109,9 @@ function runAgents(session, actions) {
 function getMissingFields(session) {
   const missing = [];
 
+  if (!session.phone) missing.push("phone");
   if (!session.income) missing.push("income");
   if (!session.loan_amount) missing.push("loan_amount");
-  if (!session.phone) missing.push("phone");
 
   return missing;
 }

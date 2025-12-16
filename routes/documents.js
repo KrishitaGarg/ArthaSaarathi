@@ -5,7 +5,6 @@ const multer = require("multer");
 
 const Session = require("../models/session");
 const KycDocument = require("../models/kycDocument");
-const { evaluateKYC } = require("../tools/kyc");
 
 // -------------------------
 // Multer config (PDF / Image upload)
@@ -43,49 +42,28 @@ router.post(
         return res.status(404).json({ error: "Session not found" });
       }
 
-      // 3️⃣ Factual KYC (TOOL ONLY)
-      const { kyc_status, risk_score } = evaluateKYC({
-        pan: pan.originalname,
-        salary: salary.originalname,
-      });
-
-      // 4️⃣ Save KYC document
+      // 3️⃣ Save uploaded documents (MVP – no real KYC)
       await KycDocument.create({
         session_id,
         pan: pan.originalname,
         salary: salary.originalname,
         employer,
-        kyc_status,
-        risk_score,
+        kyc_status: "verified",
+        risk_score: 0,
       });
 
-      // 5️⃣ Update session with FACTS
-      session.kyc_status = kyc_status;
-      session.risk_score = risk_score;
+      // 4️⃣ Update session (HARD-CODED SUCCESS)
+      session.kyc_status = "verified";
 
-      // 🔑 MVP AUTO-FLOW AFTER KYC
-      if (kyc_status === "verified") {
-        session.offers = [
-          {
-            offer_id: `offer_${Date.now()}`,
-            amount: session.loan_amount,
-            tenure_months: 24,
-            interest_rate: 10.5,
-            status: "approved",
-          },
-        ];
-        session.stage = "sanction";
-      } else {
-        session.stage = "kyc_verification";
-      }
+      // 🔑 DEMO FLOW: move directly to offers
+      session.stage = "offers";
 
       await session.save();
 
-      // 6️⃣ Response
+      // 5️⃣ Response
       res.status(200).json({
-        message: "KYC processed successfully",
-        kyc_status,
-        risk_score,
+        message: "Documents uploaded successfully",
+        next_stage: "offers",
       });
     } catch (error) {
       console.error("Document upload error:", error);

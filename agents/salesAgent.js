@@ -3,14 +3,19 @@
 function salesAgent(session) {
   const missing = [];
 
-  // ✅ Check ALL fields (not else-if)
+  // ✅ Check ALL fields
   if (!session.name) missing.push("name");
   if (!session.phone) missing.push("phone");
   if (!session.income) missing.push("income");
   if (!session.loan_amount) missing.push("loan_amount");
 
-  // 🔑 HARD STOP: basic info complete → force document upload
-  if (missing.length === 0 && !session.kyc_status) {
+  // 🔒 HARD STOP: basic info complete → move to documents ONLY ONCE
+  if (
+    missing.length === 0 &&
+    session.stage !== "documents" &&
+    session.stage !== "offers" &&
+    session.stage !== "sanction"
+  ) {
     return {
       agent: "sales",
       goal: "COLLECT_DOCUMENTS",
@@ -26,15 +31,29 @@ function salesAgent(session) {
     };
   }
 
-  // 🔁 Still collecting basics
+  // 🔁 Still collecting basic info
+  if (missing.length > 0) {
+    return {
+      agent: "sales",
+      goal: "COLLECT_BASIC_INFO",
+      status: "pending",
+      facts: {},
+      missing_fields: missing,
+      suggested_next_action: `ask_${missing[0]}`,
+      ai_message: `Please provide your ${missing[0]}.`,
+      updates: {},
+    };
+  }
+
+  // ✅ Safety fallback (should never hit)
   return {
     agent: "sales",
-    goal: "COLLECT_BASIC_INFO",
-    status: "pending",
+    goal: "WAIT",
+    status: "complete",
     facts: {},
-    missing_fields: missing,
-    suggested_next_action: `ask_${missing[0]}`,
-    ai_message: `Please provide your ${missing[0]}.`,
+    missing_fields: [],
+    suggested_next_action: null,
+    ai_message: "Processing your application.",
     updates: {},
   };
 }
