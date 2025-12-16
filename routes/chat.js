@@ -78,8 +78,9 @@ router.post("/send", async (req, res) => {
       if (phoneMatch) session.phone = phoneMatch[0];
     }
 
-    if (!session.income && (msg.includes("income") || msg.includes("salary"))) {
+    if (session.income == null && (msg.includes("income") || msg.includes("salary"))) {
       const value = extractNumber(msg);
+    
       if (value) {
         if (msg.includes("annual")) {
           session.income = Math.floor(value / 12);
@@ -88,6 +89,7 @@ router.post("/send", async (req, res) => {
         }
       }
     }
+    
 
     if (
       session.loan_amount == null &&
