@@ -16,7 +16,9 @@ function extractNumber(text) {
   return match ? Number(match[0]) : null;
 }
 
-// 🔑 HARD-CODED OFFER GENERATOR (DEMO SAFE)
+// --------------------
+// Hardcoded loan offers (demo-safe)
+// --------------------
 function generateLoanOffers(loanAmount) {
   if (loanAmount <= 300000) {
     return [
@@ -65,24 +67,33 @@ router.post("/send", async (req, res) => {
     const msg = message.toLowerCase();
 
     // --------------------
-    // 2️⃣ FACT EXTRACTION
+    // 2️⃣ FACT EXTRACTION (HARD-LOCKED)
     // --------------------
+
+    // Name
     if (!session.name && msg.startsWith("my name is")) {
       session.name = message.replace(/my name is/i, "").trim();
     }
 
+    // Phone
     if (!session.phone) {
       const phoneMatch = msg.match(/\b\d{10}\b/);
       if (phoneMatch) session.phone = phoneMatch[0];
     }
 
-    if (!session.income && (msg.includes("income") || msg.includes("salary"))) {
+    // 🔒 Income: collect ONLY before loan_amount exists
+    if (
+      session.income == null &&
+      session.loan_amount == null &&
+      (msg.includes("income") || msg.includes("salary"))
+    ) {
       const income = extractNumber(msg);
       if (income) session.income = income;
     }
 
+    // 🔒 Loan amount: collect once
     if (
-      !session.loan_amount &&
+      session.loan_amount == null &&
       (msg.includes("loan") || msg.includes("amount"))
     ) {
       const amount = extractNumber(msg);
@@ -90,7 +101,16 @@ router.post("/send", async (req, res) => {
     }
 
     // --------------------
-    // 3️⃣ OFFER SELECTION HANDLING
+    // 3️⃣ HARD LOCK BASIC INFO STAGE
+    // --------------------
+    if (session.phone && session.income && session.loan_amount) {
+      if (!session.stage || session.stage === "inquiry") {
+        session.stage = "documents";
+      }
+    }
+
+    // --------------------
+    // 4️⃣ Offer selection
     // --------------------
     if (session.stage === "offers" && session.offers) {
       const choice =
@@ -113,24 +133,23 @@ router.post("/send", async (req, res) => {
     await session.save();
 
     // --------------------
-    // 4️⃣ Orchestrator
+    // 5️⃣ Orchestrator
     // --------------------
     const orchestration = decideNextActions(session);
 
     // --------------------
-    // 5️⃣ Agents
+    // 6️⃣ Agents
     // --------------------
     const agentResults = runAgents(session, orchestration.actions);
 
-    let next_action = null;
     let goal = orchestration.goal;
+    let next_action = null;
 
     agentResults.forEach((result) => {
       if (result.updates) {
         Object.assign(session, result.updates);
       }
 
-      // Force document upload UI
       if (
         result.agent === "sales" &&
         result.suggested_next_action === "upload_docs"
@@ -142,17 +161,16 @@ router.post("/send", async (req, res) => {
     });
 
     // --------------------
-    // 6️⃣ HARD-CODED DOC → OFFERS TRANSITION
+    // 7️⃣ Documents → Offers (demo hardcode)
     // --------------------
     if (session.stage === "documents") {
-      // simulate successful upload
       session.offers = generateLoanOffers(session.loan_amount);
       session.stage = "offers";
       goal = "SHOW_OFFERS";
     }
 
     // --------------------
-    // 7️⃣ Terminal detection
+    // 8️⃣ Terminal check
     // --------------------
     const isTerminal =
       goal === "COMPLETE_FLOW" ||
@@ -161,7 +179,7 @@ router.post("/send", async (req, res) => {
     await session.save();
 
     // --------------------
-    // 8️⃣ Narration
+    // 9️⃣ Narration
     // --------------------
     let aiResponse;
     try {
@@ -180,7 +198,7 @@ router.post("/send", async (req, res) => {
     }
 
     // --------------------
-    // 9️⃣ Response
+    // 🔟 Response
     // --------------------
     res.status(200).json({
       session_id: session.session_id,
