@@ -67,10 +67,16 @@ router.post("/send", async (req, res) => {
     const msg = message.toLowerCase();
 
     // --------------------
-    // 2️⃣ FACT EXTRACTION
+    // 2️⃣ FACT EXTRACTION (FIXED)
     // --------------------
-    if (!session.name && msg.startsWith("my name is")) {
-      session.name = message.replace(/my name is/i, "").trim();
+    if (!session.name) {
+      const nameMatch = message.match(
+        /(my name is|i am|i'm)\s+([a-zA-Z ]{2,})/i
+      );
+
+      if (nameMatch) {
+        session.name = nameMatch[2].trim();
+      }
     }
 
     if (!session.phone) {
@@ -80,9 +86,8 @@ router.post("/send", async (req, res) => {
 
     if (msg.includes("income") || msg.includes("salary")) {
       const value = extractNumber(msg);
-    
+
       if (value) {
-        // normalize: ALWAYS store monthly income
         if (msg.includes("annual")) {
           session.income = Math.floor(value / 12);
         } else {
@@ -90,7 +95,6 @@ router.post("/send", async (req, res) => {
         }
       }
     }
-    
 
     if (
       session.loan_amount == null &&
@@ -100,10 +104,8 @@ router.post("/send", async (req, res) => {
       if (amount) session.loan_amount = amount;
     }
 
-    
-
     // --------------------
-    // 4️⃣ LLM KYC VERIFICATION (after upload)
+    // 4️⃣ LLM KYC VERIFICATION
     // --------------------
     if (
       session.stage === "documents" &&
@@ -113,7 +115,6 @@ router.post("/send", async (req, res) => {
       session.kyc_status = "verified";
       session.stage = "kyc_verified";
     }
-    
 
     await session.save();
 
@@ -148,10 +149,7 @@ router.post("/send", async (req, res) => {
     // --------------------
     // 7️⃣ After KYC → Show Offers
     // --------------------
-    if (
-      session.stage === "kyc_verified" &&
-      !session.offers
-    ) {
+    if (session.stage === "kyc_verified" && !session.offers) {
       session.offers = generateLoanOffers(session.loan_amount);
       session.stage = "offers";
       goal = "SHOW_OFFERS";
@@ -179,12 +177,9 @@ router.post("/send", async (req, res) => {
     }
 
     // --------------------
-    // 9️⃣ Generate sanction letter ONLY on user intent
+    // 9️⃣ Generate sanction letter
     // --------------------
-    if (
-      session.stage === "sanction_ready" &&
-      msg.includes("generate")
-    ) {
+    if (session.stage === "sanction_ready" && msg.includes("generate")) {
       session.sanction_letter_url =
         "https://demo-bank.com/sanction-letter.pdf";
       session.stage = "completed";
