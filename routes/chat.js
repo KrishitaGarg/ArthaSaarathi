@@ -106,6 +106,17 @@ router.post("/send", async (req, res) => {
       }
     }
 
+    if (
+      session.stage === "inquiry" &&
+      session.name &&
+      session.phone &&
+      session.income != null &&
+      session.loan_amount != null
+    ) {
+      session.stage = "documents";
+    }
+    
+
     // --------------------
     // 3️⃣ Save after extraction
     // --------------------
