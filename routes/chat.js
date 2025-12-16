@@ -80,12 +80,12 @@ router.post("/send", async (req, res) => {
 
     if (
       session.income == null &&
-      session.loan_amount == null &&
       (msg.includes("income") || msg.includes("salary"))
     ) {
       const income = extractNumber(msg);
       if (income) session.income = income;
     }
+    
 
     if (
       session.loan_amount == null &&
