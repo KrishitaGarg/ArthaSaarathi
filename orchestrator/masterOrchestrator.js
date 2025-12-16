@@ -7,27 +7,29 @@ function decideNextActions(session) {
   const actions = [];
   let goal = null;
 
-  // 1️⃣ Collect basic info (STRICT — must match salesAgent)
-  if (!session.name || !session.phone || !session.income || !session.loan_amount) {
+  // 🔒 STAGE-DRIVEN FLOW (NO FIELD CHECKS OUTSIDE INQUIRY)
+
+  // 1️⃣ Inquiry → collect basic info
+  if (session.stage === "inquiry") {
     goal = "COLLECT_BASIC_INFO";
   }
 
-  // 2️⃣ Waiting for document upload (salesAgent already triggered UI)
+  // 2️⃣ After basic info → wait for documents
   else if (session.stage === "documents") {
     goal = "WAIT_FOR_DOCUMENTS";
   }
 
-  // 3️⃣ Offer stage (hard-coded demo safe)
+  // 3️⃣ Offers stage
   else if (session.stage === "offers") {
     goal = "SHOW_OFFERS";
   }
 
-  // 4️⃣ Sanction stage
-  else if (session.stage === "sanction") {
+  // 4️⃣ Sanction generation
+  else if (session.stage === "sanction" || session.stage === "sanction_ready") {
     goal = "GENERATE_SANCTION";
   }
 
-  // 5️⃣ Done
+  // 5️⃣ Completed
   else {
     goal = "COMPLETE_FLOW";
   }
@@ -36,7 +38,7 @@ function decideNextActions(session) {
     case "COLLECT_BASIC_INFO":
       actions.push({
         agent: "sales",
-        reason: "Missing basic user information",
+        reason: "Collecting basic user information",
         missing_fields: getMissingFields(session),
       });
       break;
@@ -106,13 +108,14 @@ function runAgents(session, actions) {
   return results;
 }
 
+// ⚠️ Used ONLY during inquiry
 function getMissingFields(session) {
   const missing = [];
 
   if (!session.name) missing.push("name");
   if (!session.phone) missing.push("phone");
-  if (!session.income) missing.push("income");
-  if (!session.loan_amount) missing.push("loan_amount");
+  if (session.income == null) missing.push("income");
+  if (session.loan_amount == null) missing.push("loan_amount");
 
   return missing;
 }

@@ -3,34 +3,32 @@
 function salesAgent(session) {
   const missing = [];
 
-  // ✅ Check ALL fields
-  if (!session.name) missing.push("name");
-  if (!session.phone) missing.push("phone");
-  if (!session.income) missing.push("income");
-  if (!session.loan_amount) missing.push("loan_amount");
-
-  // 🔒 HARD STOP: basic info complete → move to documents ONLY ONCE
+  // 🔒 ABSOLUTE STOP: never collect sales info after basic info is complete
   if (
-    missing.length === 0 &&
-    session.stage !== "documents" &&
-    session.stage !== "offers" &&
-    session.stage !== "sanction"
+    session.stage === "basic_info_complete" ||
+    session.stage === "documents" ||
+    session.stage === "kyc_verified" ||
+    session.stage === "offers" ||
+    session.stage === "sanction_ready" ||
+    session.stage === "completed"
   ) {
     return {
       agent: "sales",
-      goal: "COLLECT_DOCUMENTS",
-      status: "pending",
+      goal: "WAIT",
+      status: "complete",
       facts: {},
-      missing_fields: ["pan", "salary"], // 👈 important
-      suggested_next_action: "upload_docs",
-      ai_message:
-        "Great! I have your basic details. Please upload your PAN card and latest salary slip to continue.",
-      updates: {
-        stage: "documents",
-      },
+      missing_fields: [],
+      suggested_next_action: null,
+      ai_message: null,
+      updates: {},
     };
-    
   }
+
+  // ✅ Collect basic info ONLY in inquiry stage
+  if (!session.name) missing.push("name");
+  else if (!session.phone) missing.push("phone");
+  else if (session.income == null) missing.push("income");
+  else if (session.loan_amount == null) missing.push("loan_amount");
 
   // 🔁 Still collecting basic info
   if (missing.length > 0) {
@@ -46,16 +44,19 @@ function salesAgent(session) {
     };
   }
 
-  // ✅ Safety fallback (should never hit)
+  // 🔒 Basic info just completed → handoff
   return {
     agent: "sales",
-    goal: "WAIT",
-    status: "complete",
+    goal: "COLLECT_DOCUMENTS",
+    status: "pending",
     facts: {},
-    missing_fields: [],
-    suggested_next_action: null,
-    ai_message: "Processing your application.",
-    updates: {},
+    missing_fields: ["pan", "salary"],
+    suggested_next_action: "upload_docs",
+    ai_message:
+      "Great! I have your basic details. Please upload your PAN card and latest salary slip to continue.",
+    updates: {
+      stage: "basic_info_complete",
+    },
   };
 }
 

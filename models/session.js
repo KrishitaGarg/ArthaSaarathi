@@ -29,10 +29,22 @@ const sessionSchema = new mongoose.Schema(
       type: Number,
     },
 
+    // 🔒 ADD THIS (YOU ALREADY USE IT)
+    documents_uploaded: {
+      type: Boolean,
+      default: false,
+    },
+
     kyc_status: {
       type: String,
       enum: ["pending", "verified", "rejected"],
       default: "pending",
+    },
+
+    // (optional but safe)
+    kyc_started: {
+      type: Boolean,
+      default: false,
     },
 
     risk_score: {
