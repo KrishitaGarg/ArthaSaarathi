@@ -8,11 +8,11 @@ const kycDocumentSchema = new mongoose.Schema(
       index: true,
     },
     pan: {
-      type: String,
+      type: String, // filename
       required: true,
     },
     salary: {
-      type: Number,
+      type: String, // filename
       required: true,
     },
     employer: {

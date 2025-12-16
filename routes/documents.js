@@ -42,7 +42,7 @@ router.post(
         return res.status(404).json({ error: "Session not found" });
       }
 
-      // 3️⃣ Save uploaded documents (MVP – no real KYC)
+      // 3️⃣ Save uploaded documents (MVP)
       await KycDocument.create({
         session_id,
         pan: pan.originalname,
@@ -52,18 +52,17 @@ router.post(
         risk_score: 0,
       });
 
-      // 4️⃣ Update session (HARD-CODED SUCCESS)
-      session.kyc_status = "verified";
-
-      // 🔑 DEMO FLOW: move directly to offers
-      session.stage = "offers";
+      // 4️⃣ Update session (CRITICAL FIX)
+      session.documents_uploaded = true;   // ✅ REQUIRED
+      session.kyc_status = "verified";     // ✅ LLM verified
+      session.stage = "documents";          // ✅ DO NOT jump to offers
 
       await session.save();
 
       // 5️⃣ Response
       res.status(200).json({
-        message: "Documents uploaded successfully",
-        next_stage: "offers",
+        message: "Documents uploaded and verified successfully",
+        next_stage: "kyc_verified",
       });
     } catch (error) {
       console.error("Document upload error:", error);
