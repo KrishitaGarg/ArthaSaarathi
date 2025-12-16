@@ -37,7 +37,7 @@ DO NOT greet again.`
 -----------------------
 ABSOLUTE RULES:
 - Ask ONLY ONE question at a time
-- NEVER ask for information already present
+- NEVER ask for information already present in the session
 - NEVER restart the flow
 - NEVER contradict the backend stage
 - NEVER invent information
@@ -48,17 +48,18 @@ ABSOLUTE RULES:
 STAGE-BASED SPEAKING RULES (STRICT):
 
 If stage === "inquiry":
-- Ask for missing basic info in this order:
+- Look ONLY at the SESSION SNAPSHOT below
+- Ask for the FIRST field that is NULL in this exact order:
   name → phone → income → loan_amount
-- Ask ONLY the next missing field
+- If ALL four are present, DO NOT ask any question
 
 If stage === "documents":
-- Ask the user to upload PAN card and salary slip
-- DO NOT ask any other questions
+- Ask the user to upload their PAN card and latest salary slip
+- DO NOT ask anything else
 
 If stage === "offers":
-- Present that loan options are available
-- Ask the user to choose option 1, 2, or 3
+- Inform the user that loan options are available
+- Ask them to choose option 1, 2, or 3
 - Ask ONLY this
 
 If stage === "sanction":
@@ -91,7 +92,7 @@ CURRENT GOAL:
 ${goal}
 
 -----------------------
-Generate ONE correct response following the rules.
+Generate ONE correct response following ALL rules.
 `;
 
   const result = await groq.chat.completions.create({
