@@ -7,22 +7,22 @@ function decideNextActions(session) {
   const actions = [];
   let goal = null;
 
-  // 1️⃣ Collect basic info (STRICT)
-  if (!session.income || !session.loan_amount || !session.phone) {
+  // 1️⃣ Collect basic info (STRICT — must match salesAgent)
+  if (!session.name || !session.phone || !session.income || !session.loan_amount) {
     goal = "COLLECT_BASIC_INFO";
   }
 
-  // 2️⃣ HARD-CODED DOCUMENT UPLOAD STAGE (DEMO SAFE)
+  // 2️⃣ Waiting for document upload (salesAgent already triggered UI)
   else if (session.stage === "documents") {
-    goal = "REQUEST_DOCUMENT_UPLOAD";
+    goal = "WAIT_FOR_DOCUMENTS";
   }
 
-  // 3️⃣ HARD-CODED OFFER STAGE (after docs)
+  // 3️⃣ Offer stage (hard-coded demo safe)
   else if (session.stage === "offers") {
     goal = "SHOW_OFFERS";
   }
 
-  // 4️⃣ Generate sanction after offer selected
+  // 4️⃣ Sanction stage
   else if (session.stage === "sanction") {
     goal = "GENERATE_SANCTION";
   }
@@ -41,10 +41,10 @@ function decideNextActions(session) {
       });
       break;
 
-    case "REQUEST_DOCUMENT_UPLOAD":
+    case "WAIT_FOR_DOCUMENTS":
       actions.push({
         agent: "none",
-        reason: "Show document upload UI to user",
+        reason: "Waiting for user to upload documents",
       });
       break;
 
@@ -109,6 +109,7 @@ function runAgents(session, actions) {
 function getMissingFields(session) {
   const missing = [];
 
+  if (!session.name) missing.push("name");
   if (!session.phone) missing.push("phone");
   if (!session.income) missing.push("income");
   if (!session.loan_amount) missing.push("loan_amount");

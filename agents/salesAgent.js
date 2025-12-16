@@ -21,7 +21,7 @@ function salesAgent(session) {
       goal: "COLLECT_DOCUMENTS",
       status: "pending",
       facts: {},
-      missing_fields: ["documents"],
+      missing_fields: ["pan", "salary"], // 👈 important
       suggested_next_action: "upload_docs",
       ai_message:
         "Great! I have your basic details. Please upload your PAN card and latest salary slip to continue.",
@@ -29,6 +29,7 @@ function salesAgent(session) {
         stage: "documents",
       },
     };
+    
   }
 
   // 🔁 Still collecting basic info

@@ -95,14 +95,7 @@ router.post("/send", async (req, res) => {
       if (amount) session.loan_amount = amount;
     }
 
-    // --------------------
-    // 3️⃣ Move to documents stage
-    // --------------------
-    if (session.phone && session.income && session.loan_amount) {
-      if (!session.stage || session.stage === "inquiry") {
-        session.stage = "documents";
-      }
-    }
+    
 
     // --------------------
     // 4️⃣ LLM KYC VERIFICATION (after upload)
@@ -115,6 +108,7 @@ router.post("/send", async (req, res) => {
       session.kyc_status = "verified";
       session.stage = "kyc_verified";
     }
+    
 
     await session.save();
 

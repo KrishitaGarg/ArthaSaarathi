@@ -60,10 +60,10 @@ router.post(
       await session.save();
 
       // 5️⃣ Response
-      res.status(200).json({
-        message: "Documents uploaded and verified successfully",
-        next_stage: "kyc_verified",
-      });
+      
+    res.status(200).json({
+      message: "Documents uploaded successfully",
+    });
     } catch (error) {
       console.error("Document upload error:", error);
       res.status(500).json({ error: "Internal server error" });
