@@ -18,7 +18,7 @@ const upload = multer({
 // -------------------------
 router.post(
   "/upload",
-  upload.array("files", 5), // ✅ MATCH FRONTEND
+  upload.array("files", 5),
   async (req, res) => {
     try {
       const { session_id, employer } = req.body;
@@ -37,19 +37,20 @@ router.post(
         return res.status(404).json({ error: "Session not found" });
       }
 
-      // 3️⃣ Save uploaded docs (MVP-safe)
+      // 3️⃣ Save KYC document (✅ FIXED)
       await KycDocument.create({
         session_id,
-        documents: files.map((f) => f.originalname),
+        pan: files[0]?.originalname || "PAN_UPLOADED",
+        salary: session.income,          // ✅ FIX (NUMBER, not filename)
         employer,
         kyc_status: "verified",
         risk_score: 0,
       });
 
-      // 4️⃣ 🔒 CRITICAL: lock document upload
+      // 4️⃣ Update session
       session.documents_uploaded = true;
       session.kyc_status = "verified";
-      session.stage = "documents"; // chat.js will move forward
+      session.stage = "documents";
 
       await session.save();
 
