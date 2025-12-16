@@ -17,31 +17,11 @@ function extractNumber(text) {
 }
 
 // --------------------
-// Hardcoded loan offers (demo-safe)
-// --------------------
-function generateLoanOffers(loanAmount) {
-  if (loanAmount <= 300000) {
-    return [
-      { id: 1, emi: 9500, tenure: 36, rate: "13.5%" },
-      { id: 2, emi: 7200, tenure: 48, rate: "14%" },
-      { id: 3, emi: 5800, tenure: 60, rate: "14.5%" },
-    ];
-  }
-
-  return [
-    { id: 1, emi: 15500, tenure: 36, rate: "12.5%" },
-    { id: 2, emi: 12000, tenure: 48, rate: "13%" },
-    { id: 3, emi: 9800, tenure: 60, rate: "13.5%" },
-  ];
-}
-
-// --------------------
 // POST /api/chat/send
 // --------------------
 router.post("/send", async (req, res) => {
   try {
     const { session_id, message } = req.body;
-
     if (!message) {
       return res.status(400).json({ error: "message is required" });
     }
@@ -49,11 +29,9 @@ router.post("/send", async (req, res) => {
     // --------------------
     // 1️⃣ Load or create session
     // --------------------
-    let session = null;
-
-    if (session_id) {
-      session = await Session.findOne({ session_id });
-    }
+    let session = session_id
+      ? await Session.findOne({ session_id })
+      : null;
 
     const isFirstInteraction = !session;
 
@@ -67,67 +45,65 @@ router.post("/send", async (req, res) => {
     const msg = message.toLowerCase();
 
     // --------------------
-    // 2️⃣ FACT EXTRACTION
+    // 2️⃣ FACT EXTRACTION (ONLY in inquiry)
     // --------------------
-    if (!session.name && msg.startsWith("my name is")) {
-      session.name = message.replace(/my name is/i, "").trim();
-    }
-
-    if (!session.phone) {
-      const phoneMatch = msg.match(/\b\d{10}\b/);
-      if (phoneMatch) session.phone = phoneMatch[0];
-    }
-
-    if (
-      session.income == null &&
-      (msg.includes("income") || msg.includes("salary"))
-    ) {
-      const value = extractNumber(msg);
-      if (value) {
-        session.income = msg.includes("annual")
-          ? Math.floor(value / 12)
-          : value;
+    if (session.stage === "inquiry") {
+      if (!session.name && msg.startsWith("my name is")) {
+        session.name = message.replace(/my name is/i, "").trim();
       }
-    }
 
-    if (
-      session.loan_amount == null &&
-      (msg.includes("loan") || msg.includes("amount"))
-    ) {
-      const amount = extractNumber(msg);
-      if (amount) {
-        session.loan_amount = amount;
+      if (!session.phone) {
+        const phoneMatch = msg.match(/\b\d{10}\b/);
+        if (phoneMatch) session.phone = phoneMatch[0];
       }
-    }
 
-    // ✅ FINAL & ONLY transition: inquiry → documents
-    if (
-      session.stage === "inquiry" &&
-      session.name &&
-      session.phone &&
-      session.income != null &&
-      session.loan_amount != null
-    ) {
-      session.stage = "documents";
+      if (
+        session.income == null &&
+        (msg.includes("income") || msg.includes("salary"))
+      ) {
+        const value = extractNumber(msg);
+        if (value) {
+          session.income = msg.includes("annual")
+            ? Math.floor(value / 12)
+            : value;
+        }
+      }
+
+      if (
+        session.loan_amount == null &&
+        (msg.includes("loan") || msg.includes("amount"))
+      ) {
+        const amount = extractNumber(msg);
+        if (amount) session.loan_amount = amount;
+      }
+
+      // ✅ inquiry → documents (ONLY ONCE)
+      if (
+        session.name &&
+        session.phone &&
+        session.income != null &&
+        session.loan_amount != null
+      ) {
+        session.stage = "documents";
+      }
     }
 
     await session.save();
 
     // --------------------
-    // 3️⃣ KYC auto-verification after upload
+    // 3️⃣ After document upload → KYC verified
     // --------------------
     if (
       session.stage === "documents" &&
       session.documents_uploaded === true &&
-      session.kyc_status !== "verified"
+      session.kyc_status === "verified"
     ) {
-      session.kyc_status = "verified";
-      session.stage = "kyc_verified";
+      session.stage = "sanction_ready";
       await session.save();
     }
 
     // --------------------
-    // 4️⃣ Orchestrator + Agents
+    // 4️⃣ Orchestrator + agents
     // --------------------
     const orchestration = decideNextActions(session);
     const agentResults = runAgents(session, orchestration.actions);
@@ -135,61 +111,30 @@ router.post("/send", async (req, res) => {
     let goal = orchestration.goal;
     let next_action = null;
 
-    agentResults.forEach((result) => {
-      if (result.updates) {
-        Object.assign(session, result.updates);
-      }
-    });
-
-    // ✅ FORCE upload UI whenever in documents stage
+    // --------------------
+    // 5️⃣ UI control (UPLOAD ONLY IN DOCUMENTS)
+    // --------------------
     if (session.stage === "documents") {
       next_action = "upload_docs";
       goal = "COLLECT_DOCUMENTS";
     }
 
     // --------------------
-    // 5️⃣ After KYC → Show offers
-    // --------------------
-    if (session.stage === "kyc_verified" && !session.offers) {
-      session.offers = generateLoanOffers(session.loan_amount);
-      session.stage = "offers";
-      goal = "SHOW_OFFERS";
-    }
-
-    // --------------------
-    // 6️⃣ Offer selection
-    // --------------------
-    if (session.stage === "offers" && session.offers) {
-      const choice =
-        msg.includes("1") ? 1 :
-        msg.includes("2") ? 2 :
-        msg.includes("3") ? 3 : null;
-
-      if (choice) {
-        session.selected_offer = session.offers.find(
-          (o) => o.id === choice
-        );
-        session.stage = "sanction_ready";
-      }
-    }
-
-    // --------------------
-    // 7️⃣ Generate sanction letter
+    // 6️⃣ Generate sanction letter
     // --------------------
     if (
       session.stage === "sanction_ready" &&
-      msg.includes("generate")
+      msg.includes("ok")
     ) {
       session.sanction_letter_url =
         "https://demo-bank.com/sanction-letter.pdf";
       session.stage = "completed";
       goal = "COMPLETE_FLOW";
+      await session.save();
     }
 
-    await session.save();
-
     // --------------------
-    // 8️⃣ Narration
+    // 7️⃣ Narration
     // --------------------
     const aiResponse = await narrateConversation({
       session,
@@ -200,15 +145,14 @@ router.post("/send", async (req, res) => {
     });
 
     // --------------------
-    // 9️⃣ Response
+    // 8️⃣ Response
     // --------------------
     res.status(200).json({
       session_id: session.session_id,
       stage: session.stage,
       goal,
       next_action,
-      offers: session.offers || null,
-      selected_offer: session.selected_offer || null,
+      sanction_letter_url: session.sanction_letter_url || null,
       ai_message: aiResponse,
     });
   } catch (error) {

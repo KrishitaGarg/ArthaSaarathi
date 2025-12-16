@@ -50,7 +50,8 @@ router.post(
       // 4️⃣ Update session
       session.documents_uploaded = true;
       session.kyc_status = "verified";
-      session.stage = "documents";
+      session.stage = "kyc_verified";
+
 
       await session.save();
 
