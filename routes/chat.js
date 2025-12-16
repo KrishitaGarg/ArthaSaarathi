@@ -78,11 +78,9 @@ router.post("/send", async (req, res) => {
       if (phoneMatch) session.phone = phoneMatch[0];
     }
 
-    if (msg.includes("income") || msg.includes("salary")) {
+    if (!session.income && (msg.includes("income") || msg.includes("salary"))) {
       const value = extractNumber(msg);
-    
       if (value) {
-        // normalize: ALWAYS store monthly income
         if (msg.includes("annual")) {
           session.income = Math.floor(value / 12);
         } else {
@@ -90,17 +88,25 @@ router.post("/send", async (req, res) => {
         }
       }
     }
-    
 
     if (
       session.loan_amount == null &&
       (msg.includes("loan") || msg.includes("amount"))
     ) {
       const amount = extractNumber(msg);
-      if (amount) session.loan_amount = amount;
+
+      if (amount) {
+        session.loan_amount = amount;
+
+        // 🔒 FINAL FIX: LOCK BASIC INFO COMPLETION
+        session.stage = "basic_info_complete";
+      }
     }
 
-    
+    // --------------------
+    // 3️⃣ Save after extraction
+    // --------------------
+    await session.save();
 
     // --------------------
     // 4️⃣ LLM KYC VERIFICATION (after upload)
@@ -112,10 +118,8 @@ router.post("/send", async (req, res) => {
     ) {
       session.kyc_status = "verified";
       session.stage = "kyc_verified";
+      await session.save();
     }
-    
-
-    await session.save();
 
     // --------------------
     // 5️⃣ Orchestrator
