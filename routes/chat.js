@@ -78,12 +78,17 @@ router.post("/send", async (req, res) => {
       if (phoneMatch) session.phone = phoneMatch[0];
     }
 
-    if (
-      session.income == null &&
-      (msg.includes("income") || msg.includes("salary"))
-    ) {
-      const income = extractNumber(msg);
-      if (income) session.income = income;
+    if (msg.includes("income") || msg.includes("salary")) {
+      const value = extractNumber(msg);
+    
+      if (value) {
+        // normalize: ALWAYS store monthly income
+        if (msg.includes("annual")) {
+          session.income = Math.floor(value / 12);
+        } else {
+          session.income = value;
+        }
+      }
     }
     
 
