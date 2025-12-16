@@ -71,19 +71,21 @@ If stage === "documents":
 - Ask the user to upload PAN card and latest salary slip.
 - DO NOT ask any other question.
 
-If stage === "offers":
-- Inform the user that loan options are available.
-- Ask the user to choose option 1, 2, or 3 ONLY.
+If stage === "kyc_verified":
+- Confirm documents have been successfully verified.
+- Confirm the user is eligible for the loan.
+- Ask the user to say OK to generate the sanction letter.
+- DO NOT ask for documents or any other information.
 
-If stage === "sanction" OR stage === "sanction_ready":
-- Inform the user that the sanction letter is being generated.
-- DO NOT ask questions.
+If stage === "sanction_ready":
+- Wait for the user to say OK.
+- DO NOT ask any question.
 
 If stage === "completed" OR isTerminal === true:
-- Confirm loan approval.
-- Mention sanction letter availability.
-- Thank the user.
-- END the conversation.
+- Congratulate the user on loan approval.
+- Mention that the sanction letter has been generated.
+- Provide the sanction letter link if available.
+- Thank the user and end the conversation.
 
 -----------------------
 SESSION SNAPSHOT (READ ONLY):
@@ -116,7 +118,7 @@ Generate ONE correct response following ALL rules.
         content: prompt,
       },
     ],
-    temperature: 0.1, // 🔒 lower = more deterministic
+    temperature: 0.1,
   });
 
   return result.choices[0].message.content;

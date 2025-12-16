@@ -98,7 +98,7 @@ router.post("/send", async (req, res) => {
       session.documents_uploaded === true &&
       session.kyc_status === "verified"
     ) {
-      session.stage = "sanction_ready";
+      session.stage = "kyc_verified";
       await session.save();
     }
 
@@ -120,10 +120,10 @@ router.post("/send", async (req, res) => {
     }
 
     // --------------------
-    // 6️⃣ Generate sanction letter
+    // 6️⃣ Generate sanction letter (AFTER OK)
     // --------------------
     if (
-      session.stage === "sanction_ready" &&
+      session.stage === "kyc_verified" &&
       msg.includes("ok")
     ) {
       session.sanction_letter_url =
