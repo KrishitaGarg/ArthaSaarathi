@@ -78,34 +78,29 @@ router.post("/send", async (req, res) => {
       if (phoneMatch) session.phone = phoneMatch[0];
     }
 
-    if (session.income == null && (msg.includes("income") || msg.includes("salary"))) {
+    if (
+      session.income == null &&
+      (msg.includes("income") || msg.includes("salary"))
+    ) {
       const value = extractNumber(msg);
-    
       if (value) {
-        if (msg.includes("annual")) {
-          session.income = Math.floor(value / 12);
-        } else {
-          session.income = value;
-        }
+        session.income = msg.includes("annual")
+          ? Math.floor(value / 12)
+          : value;
       }
     }
-    console.log("INCOME:", session.income, "STAGE:", session.stage);
-
 
     if (
       session.loan_amount == null &&
       (msg.includes("loan") || msg.includes("amount"))
     ) {
       const amount = extractNumber(msg);
-
       if (amount) {
         session.loan_amount = amount;
-
-        // 🔒 FINAL FIX: LOCK BASIC INFO COMPLETION
-        session.stage = "basic_info_complete";
       }
     }
 
+    // ✅ FINAL & ONLY transition: inquiry → documents
     if (
       session.stage === "inquiry" &&
       session.name &&
@@ -115,15 +110,11 @@ router.post("/send", async (req, res) => {
     ) {
       session.stage = "documents";
     }
-    
 
-    // --------------------
-    // 3️⃣ Save after extraction
-    // --------------------
     await session.save();
 
     // --------------------
-    // 4️⃣ LLM KYC VERIFICATION (after upload)
+    // 3️⃣ KYC auto-verification after upload
     // --------------------
     if (
       session.stage === "documents" &&
@@ -136,13 +127,9 @@ router.post("/send", async (req, res) => {
     }
 
     // --------------------
-    // 5️⃣ Orchestrator
+    // 4️⃣ Orchestrator + Agents
     // --------------------
     const orchestration = decideNextActions(session);
-
-    // --------------------
-    // 6️⃣ Agents
-    // --------------------
     const agentResults = runAgents(session, orchestration.actions);
 
     let goal = orchestration.goal;
@@ -152,46 +139,31 @@ router.post("/send", async (req, res) => {
       if (result.updates) {
         Object.assign(session, result.updates);
       }
-
-      if (
-        result.agent === "sales" &&
-        result.suggested_next_action === "upload_docs"
-      ) {
-        next_action = "upload_docs";
-        goal = "COLLECT_DOCUMENTS";
-        session.stage = "documents";
-      }
     });
-    // 🔒 FORCE upload UI when in documents stage (independent of agents)
+
+    // ✅ FORCE upload UI whenever in documents stage
     if (session.stage === "documents") {
       next_action = "upload_docs";
+      goal = "COLLECT_DOCUMENTS";
     }
 
-
     // --------------------
-    // 7️⃣ After KYC → Show Offers
+    // 5️⃣ After KYC → Show offers
     // --------------------
-    if (
-      session.stage === "kyc_verified" &&
-      !session.offers
-    ) {
+    if (session.stage === "kyc_verified" && !session.offers) {
       session.offers = generateLoanOffers(session.loan_amount);
       session.stage = "offers";
       goal = "SHOW_OFFERS";
     }
 
     // --------------------
-    // 8️⃣ Offer selection
+    // 6️⃣ Offer selection
     // --------------------
     if (session.stage === "offers" && session.offers) {
       const choice =
-        msg.includes("1") || msg.includes("first")
-          ? 1
-          : msg.includes("2") || msg.includes("second")
-          ? 2
-          : msg.includes("3") || msg.includes("third")
-          ? 3
-          : null;
+        msg.includes("1") ? 1 :
+        msg.includes("2") ? 2 :
+        msg.includes("3") ? 3 : null;
 
       if (choice) {
         session.selected_offer = session.offers.find(
@@ -202,7 +174,7 @@ router.post("/send", async (req, res) => {
     }
 
     // --------------------
-    // 9️⃣ Generate sanction letter ONLY on user intent
+    // 7️⃣ Generate sanction letter
     // --------------------
     if (
       session.stage === "sanction_ready" &&
@@ -214,41 +186,21 @@ router.post("/send", async (req, res) => {
       goal = "COMPLETE_FLOW";
     }
 
-    // --------------------
-    // 🔟 Terminal check
-    // --------------------
-    const isTerminal =
-      goal === "COMPLETE_FLOW" ||
-      Boolean(session.sanction_letter_url);
-
     await session.save();
 
     // --------------------
-    // 11️⃣ Narration
+    // 8️⃣ Narration
     // --------------------
-    let aiResponse;
-    try {
-      aiResponse = await narrateConversation({
-        session,
-        goal,
-        agentResults,
-        isFirstInteraction,
-        isTerminal,
-      });
-    } catch (err) {
-      if (session.stage === "kyc_verified") {
-        aiResponse =
-          "Your documents have been successfully verified by our system. You may now proceed to view loan offers.";
-      } else if (session.stage === "sanction_ready") {
-        aiResponse =
-          "Your loan offer is confirmed. Please say 'generate sanction letter' to proceed.";
-      } else {
-        aiResponse = "Please continue.";
-      }
-    }
+    const aiResponse = await narrateConversation({
+      session,
+      goal,
+      agentResults,
+      isFirstInteraction,
+      isTerminal: session.stage === "completed",
+    });
 
     // --------------------
-    // 12️⃣ Response
+    // 9️⃣ Response
     // --------------------
     res.status(200).json({
       session_id: session.session_id,
