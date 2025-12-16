@@ -7,6 +7,7 @@ const {
   runAgents,
 } = require("../orchestrator/masterOrchestrator");
 const narrateConversation = require("../llm/narrator");
+const { generateSanctionPDF } = require("../tools/pdf");
 
 // --------------------
 // Utilities
