@@ -89,7 +89,8 @@ router.post("/send", async (req, res) => {
         }
       }
     }
-    
+    console.log("INCOME:", session.income, "STAGE:", session.stage);
+
 
     if (
       session.loan_amount == null &&
