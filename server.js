@@ -12,14 +12,14 @@ const app=express();
 app.use(cors());
 app.use(express.json());
 
-app.use("/public", express.static("public"));
+app.use("/sanctions", express.static("public/sanctions"));
 
 
 connectDB();
 
 app.use("/api/chat",chatRoutes);
 app.use("/api/documents", documentRoutes);
-app.use("/public", express.static("public"));
+
 
 
 app.get("/health",(req,res)=>{
