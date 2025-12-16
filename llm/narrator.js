@@ -37,7 +37,7 @@ DO NOT greet again.`
 -----------------------
 ABSOLUTE RULES:
 - Ask ONLY ONE question at a time
-- NEVER ask for information already present
+- NEVER ask for information already present in SESSION SNAPSHOT
 - NEVER restart the flow
 - NEVER contradict the backend stage
 - NEVER invent information
@@ -48,16 +48,18 @@ ABSOLUTE RULES:
 STAGE-BASED SPEAKING RULES (STRICT):
 
 If stage === "inquiry":
-- Ask for missing basic info in this order:
+- Determine missing fields ONLY from SESSION SNAPSHOT
+- Follow this strict order:
   name → phone → income → loan_amount
-- Ask ONLY the next missing field
+- Ask ONLY the FIRST missing field in this order
+- If a field exists in SESSION SNAPSHOT, it is NOT missing
 
 If stage === "documents":
 - Ask the user to upload PAN card and salary slip
 - DO NOT ask any other questions
 
 If stage === "offers":
-- Present that loan options are available
+- Inform the user that loan options are available
 - Ask the user to choose option 1, 2, or 3
 - Ask ONLY this
 
@@ -96,12 +98,7 @@ Generate ONE correct response following the rules.
 
   const result = await groq.chat.completions.create({
     model: "llama-3.1-8b-instant",
-    messages: [
-      {
-        role: "user",
-        content: prompt,
-      },
-    ],
+    messages: [{ role: "user", content: prompt }],
     temperature: 0.2,
   });
 
