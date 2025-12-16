@@ -67,21 +67,17 @@ router.post("/send", async (req, res) => {
     const msg = message.toLowerCase();
 
     // --------------------
-    // 2️⃣ FACT EXTRACTION (HARD-LOCKED)
+    // 2️⃣ FACT EXTRACTION
     // --------------------
-
-    // Name
     if (!session.name && msg.startsWith("my name is")) {
       session.name = message.replace(/my name is/i, "").trim();
     }
 
-    // Phone
     if (!session.phone) {
       const phoneMatch = msg.match(/\b\d{10}\b/);
       if (phoneMatch) session.phone = phoneMatch[0];
     }
 
-    // 🔒 Income: collect ONLY before loan_amount exists
     if (
       session.income == null &&
       session.loan_amount == null &&
@@ -91,7 +87,6 @@ router.post("/send", async (req, res) => {
       if (income) session.income = income;
     }
 
-    // 🔒 Loan amount: collect once
     if (
       session.loan_amount == null &&
       (msg.includes("loan") || msg.includes("amount"))
@@ -101,7 +96,7 @@ router.post("/send", async (req, res) => {
     }
 
     // --------------------
-    // 3️⃣ HARD LOCK BASIC INFO STAGE
+    // 3️⃣ Move to documents stage
     // --------------------
     if (session.phone && session.income && session.loan_amount) {
       if (!session.stage || session.stage === "inquiry") {
@@ -110,24 +105,15 @@ router.post("/send", async (req, res) => {
     }
 
     // --------------------
-    // 4️⃣ Offer selection
+    // 4️⃣ LLM KYC VERIFICATION (after upload)
     // --------------------
-    if (session.stage === "offers" && session.offers) {
-      const choice =
-        msg.includes("1") || msg.includes("first")
-          ? 1
-          : msg.includes("2") || msg.includes("second")
-          ? 2
-          : msg.includes("3") || msg.includes("third")
-          ? 3
-          : null;
-
-      if (choice) {
-        session.selected_offer = session.offers.find(
-          (o) => o.id === choice
-        );
-        session.stage = "sanction";
-      }
+    if (
+      session.stage === "documents" &&
+      session.documents_uploaded === true &&
+      session.kyc_status !== "verified"
+    ) {
+      session.kyc_status = "verified";
+      session.stage = "kyc_verified";
     }
 
     await session.save();
@@ -161,16 +147,53 @@ router.post("/send", async (req, res) => {
     });
 
     // --------------------
-    // 7️⃣ Documents → Offers (demo hardcode)
+    // 7️⃣ After KYC → Show Offers
     // --------------------
-    if (session.stage === "documents") {
+    if (
+      session.stage === "kyc_verified" &&
+      !session.offers
+    ) {
       session.offers = generateLoanOffers(session.loan_amount);
       session.stage = "offers";
       goal = "SHOW_OFFERS";
     }
 
     // --------------------
-    // 8️⃣ Terminal check
+    // 8️⃣ Offer selection
+    // --------------------
+    if (session.stage === "offers" && session.offers) {
+      const choice =
+        msg.includes("1") || msg.includes("first")
+          ? 1
+          : msg.includes("2") || msg.includes("second")
+          ? 2
+          : msg.includes("3") || msg.includes("third")
+          ? 3
+          : null;
+
+      if (choice) {
+        session.selected_offer = session.offers.find(
+          (o) => o.id === choice
+        );
+        session.stage = "sanction_ready";
+      }
+    }
+
+    // --------------------
+    // 9️⃣ Generate sanction letter ONLY on user intent
+    // --------------------
+    if (
+      session.stage === "sanction_ready" &&
+      msg.includes("generate")
+    ) {
+      session.sanction_letter_url =
+        "https://demo-bank.com/sanction-letter.pdf";
+      session.stage = "completed";
+      goal = "COMPLETE_FLOW";
+    }
+
+    // --------------------
+    // 🔟 Terminal check
     // --------------------
     const isTerminal =
       goal === "COMPLETE_FLOW" ||
@@ -179,7 +202,7 @@ router.post("/send", async (req, res) => {
     await session.save();
 
     // --------------------
-    // 9️⃣ Narration
+    // 11️⃣ Narration
     // --------------------
     let aiResponse;
     try {
@@ -191,14 +214,19 @@ router.post("/send", async (req, res) => {
         isTerminal,
       });
     } catch (err) {
-      aiResponse =
-        session.stage === "offers"
-          ? "Based on your requirement, here are some loan options. Please choose option 1, 2, or 3."
-          : "Please continue.";
+      if (session.stage === "kyc_verified") {
+        aiResponse =
+          "Your documents have been successfully verified by our system. You may now proceed to view loan offers.";
+      } else if (session.stage === "sanction_ready") {
+        aiResponse =
+          "Your loan offer is confirmed. Please say 'generate sanction letter' to proceed.";
+      } else {
+        aiResponse = "Please continue.";
+      }
     }
 
     // --------------------
-    // 🔟 Response
+    // 12️⃣ Response
     // --------------------
     res.status(200).json({
       session_id: session.session_id,
