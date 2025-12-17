@@ -19,15 +19,17 @@ function renderWithLinks(text) {
     .split(urlRegex)
     .map((part, index) => {
       if (urlRegex.test(part)) {
+        const cleanUrl = part.replace(/\.+$/, "");
+
         return (
           <a
             key={index}
-            href={part}
+            href={cleanUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="underline break-words text-blue-600 hover:text-blue-800"
           >
-            {part}
+            {cleanUrl}
           </a>
         );
       }
